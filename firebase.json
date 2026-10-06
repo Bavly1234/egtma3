@@ -1,1 +1,74 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"egtma3-church-app","appId":"1:474145321962:android:80eee6ffe14b5c0b763893","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"egtma3-church-app","configurations":{"android":"1:474145321962:android:80eee6ffe14b5c0b763893","ios":"1:474145321962:ios:2f4768d1ed71bf1a763893","web":"1:474145321962:web:5ea5aee7f22910d1763893"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "egtma3-church-app",
+          "appId": "1:474145321962:android:80eee6ffe14b5c0b763893",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "egtma3-church-app",
+          "configurations": {
+            "android": "1:474145321962:android:80eee6ffe14b5c0b763893",
+            "ios": "1:474145321962:ios:2f4768d1ed71bf1a763893",
+            "web": "1:474145321962:web:5ea5aee7f22910d1763893"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "src",
+        "*.log",
+        "lib/__tests__"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true
+    }
+  }
+}

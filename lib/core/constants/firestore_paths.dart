@@ -9,7 +9,6 @@ abstract final class FsPaths {
   static const followUps = 'follow_ups';
   static const suggestions = 'follow_up_suggestions';
   static const conferences = 'conferences';
-  static const conferenceDays = 'days';
   static const conferenceAttendance = 'conference_attendance';
   static const notifications = 'notifications';
   static const dailyVerses = 'daily_verses';
@@ -27,7 +26,6 @@ abstract final class FnNames {
   static const bootstrapFather = 'bootstrapFather';
   static const seedDemoData = 'seedDemoData';
   static const removeDemoData = 'removeDemoData';
-  static const recomputeWoman = 'recomputeWoman';
 }
 
-const kFunctionsRegion = 'europe-west1';
+const kFunctionsRegion = 'us-central1';

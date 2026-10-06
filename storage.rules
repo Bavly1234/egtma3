@@ -1,0 +1,10 @@
+rules_version = '2';
+// Storage is not used by Egtma3 yet (no photos/attachments). Deny everything
+// until a feature needs it, so nothing can be uploaded or read by default.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

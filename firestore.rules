@@ -1,0 +1,149 @@
+rules_version = '2';
+
+// Egtma3 security rules.
+// Roles live in users/{uid}.role ('father' | 'servant') and are only writable
+// by Cloud Functions (Admin SDK) or the father. Server-maintained counters on
+// women, meetings and suggestions are never writable by servants.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isActive() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && me().active == true; }
+    function isFather() { return isActive() && me().role == 'father'; }
+    function isServant() { return isActive() && me().role == 'servant'; }
+    function woman(id) { return get(/databases/$(database)/documents/women/$(id)).data; }
+    function assignedToMe(womanId) {
+      return isServant() && exists(/databases/$(database)/documents/women/$(womanId))
+        && woman(womanId).assignedServantId == request.auth.uid;
+    }
+    function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanges(keys) { return changes().hasOnly(keys); }
+    function isStatus(s) { return s == 'present' || s == 'absent'; }
+    function str(v, max) { return v is string && v.size() <= max; }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isFather();
+      // Users may only touch their own preferences, font size and push tokens.
+      allow update: if signedIn() && request.auth.uid == uid
+        && onlyChanges(['notificationPrefs', 'textScale', 'fcmTokens', 'updatedAt'])
+        || isFather() && !changes().hasAny(['role', 'active']);
+      allow create, delete: if false; // Cloud Functions only
+    }
+
+    // ---------- women ----------
+    match /women/{id} {
+      allow read: if isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid);
+      allow create: if isFather()
+        && str(request.resource.data.fullName, 200) && request.resource.data.fullName.size() >= 3
+        && str(request.resource.data.phone, 20)
+        && request.resource.data.active is bool;
+      allow update: if (isFather()
+          && !changes().hasAny(['consecutiveAbsences', 'totalPresent', 'totalAbsent', 'phoneCalls',
+                                'homeVisits', 'lastCallAt', 'lastVisitAt', 'lastAttendanceDate', 'activeSuggestionType'])
+          && request.resource.data.fullName.size() >= 3)
+        || (isServant() && resource.data.assignedServantId == request.auth.uid
+          && onlyChanges(['notes', 'updatedAt']) && str(request.resource.data.notes, 2000));
+      allow delete: if isFather();
+    }
+
+    match /streets/{id} {
+      allow read: if isActive();
+      // womenCount is maintained by Cloud Functions only.
+      allow create: if isFather() && str(request.resource.data.name, 120)
+        && !request.resource.data.keys().hasAny(['womenCount']);
+      allow update: if isFather() && str(request.resource.data.name, 120)
+        && onlyChanges(['name', 'nameNormalized', 'updatedAt']);
+      allow delete: if isFather();
+    }
+
+    // ---------- Wednesday attendance ----------
+    // Deterministic id {meetingId}_{womanId} prevents duplicates.
+    match /attendance/{id} {
+      allow read: if isFather() || (isServant() && resource.data.servantId == request.auth.uid);
+      allow create, update: if id == request.resource.data.meetingId + '_' + request.resource.data.womanId
+        && request.resource.data.meetingId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && isStatus(request.resource.data.status)
+        && request.resource.data.markedBy == request.auth.uid
+        && (isFather()
+            || (assignedToMe(request.resource.data.womanId)
+                && request.resource.data.servantId == request.auth.uid));
+      allow delete: if isFather() || (isServant() && resource.data.servantId == request.auth.uid);
+    }
+
+    match /meetings/{id} {
+      allow read: if isActive();
+      allow write: if false; // maintained by Cloud Functions
+    }
+
+    // ---------- follow-ups ----------
+    match /follow_ups/{id} {
+      allow read: if isFather() || (isServant()
+        && (resource.data.servantId == request.auth.uid || resource.data.assignedServantId == request.auth.uid));
+      allow create: if request.resource.data.servantId == request.auth.uid
+        && request.resource.data.type in ['phone_call', 'home_visit', 'note']
+        && str(request.resource.data.notes, 2000)
+        && (isFather() || assignedToMe(request.resource.data.womanId));
+      allow update: if false; // history is immutable
+      allow delete: if isFather();
+    }
+
+    // Suggestions are created by Cloud Functions; staff may only change status.
+    match /follow_up_suggestions/{id} {
+      allow read: if isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid);
+      allow update: if (isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid))
+        && onlyChanges(['status', 'updatedAt', 'completedAt', 'completedBy', 'followUpId'])
+        && request.resource.data.status in ['pending', 'assigned', 'in_progress', 'completed', 'dismissed']
+        && (request.resource.data.status != 'dismissed' || isFather());
+      allow create, delete: if false;
+    }
+
+    // ---------- conferences (separate from Wednesday attendance) ----------
+    match /conferences/{id} {
+      allow read: if isActive();
+      allow create, update: if isFather() && str(request.resource.data.name, 200)
+        && request.resource.data.days is list && request.resource.data.days.size() == 3;
+      allow delete: if isFather();
+    }
+
+    match /conference_attendance/{id} {
+      allow read: if isFather() || (isServant() && resource.data.servantId == request.auth.uid);
+      allow create, update: if id == request.resource.data.conferenceId + '_' + request.resource.data.conferenceDayId + '_' + request.resource.data.womanId
+        && isStatus(request.resource.data.attendanceStatus)
+        && request.resource.data.conferenceDayId in ['day1', 'day2', 'day3']
+        && exists(/databases/$(database)/documents/conferences/$(request.resource.data.conferenceId))
+        && (isFather() || (assignedToMe(request.resource.data.womanId)
+            && request.resource.data.servantId == request.auth.uid));
+      allow delete: if isFather();
+    }
+
+    // ---------- notifications ----------
+    match /notifications/{id} {
+      allow read: if signedIn() && resource.data.recipientId == request.auth.uid;
+      allow update: if signedIn() && resource.data.recipientId == request.auth.uid && onlyChanges(['readAt']);
+      allow create, delete: if false; // Cloud Functions only
+    }
+
+    // ---------- content & settings ----------
+    match /daily_verses/{id} {
+      allow read: if isActive();
+      allow write: if isFather();
+    }
+    match /verse_pool/{id} {
+      allow read, write: if isFather();
+    }
+    match /settings/{id} {
+      allow read: if isActive();
+      allow write: if isFather();
+    }
+
+    // ---------- audit log: append-only ----------
+    match /audit_logs/{id} {
+      allow read: if isFather();
+      allow create: if isActive() && request.resource.data.actorId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
