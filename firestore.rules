@@ -92,6 +92,8 @@ service cloud.firestore {
         && (isFather()
             || (assignedToMe(request.resource.data.womanId)
                 && request.resource.data.servantId == request.auth.uid));
+      // Reassigning a woman moves her history to the new servant.
+      allow update: if isFather() && onlyChanges(['servantId']);
       allow delete: if isFather() || (isServant() && resource.data.servantId == request.auth.uid);
     }
 
@@ -111,7 +113,8 @@ service cloud.firestore {
         && request.resource.data.type in ['phone_call', 'home_visit', 'note']
         && str(request.resource.data.notes, 2000)
         && staffFor(request.resource.data.womanId);
-      allow update: if false; // history is immutable
+      // History is immutable; only the father may move it to a new servant.
+      allow update: if isFather() && onlyChanges(['assignedServantId']);
       allow delete: if isFather();
     }
 

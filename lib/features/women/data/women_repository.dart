@@ -264,15 +264,31 @@ class WomenRepository {
   Future<void> assign(
       List<String> womanIds, AppUser? servant, AppUser actor) async {
     try {
-      final open = await _activeSuggestions(womanIds);
-      for (var i = 0; i < open.length; i += 400) {
+      // Move the woman's history to the new servant so she can see past
+      // attendance, follow-ups and suggestions (servants may only read
+      // records that carry their own id).
+      final related = <(DocumentReference, Map<String, Object?>)>[];
+      for (var i = 0; i < womanIds.length; i += 30) {
+        final chunk = womanIds.sublist(i, (i + 30).clamp(0, womanIds.length));
+        Future<void> collect(String collection, Map<String, Object?> fields) async {
+          final snap =
+              await _db.collection(collection).where('womanId', whereIn: chunk).get();
+          related.addAll(snap.docs.map((d) => (d.reference, fields)));
+        }
+
+        await collect(FsPaths.suggestions, {
+          'assignedServantId': servant?.id,
+          'assignedServantName': servant?.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        await collect(FsPaths.attendance, {'servantId': servant?.id});
+        await collect(FsPaths.conferenceAttendance, {'servantId': servant?.id});
+        await collect(FsPaths.followUps, {'assignedServantId': servant?.id});
+      }
+      for (var i = 0; i < related.length; i += 400) {
         final batch = _db.batch();
-        for (final d in open.skip(i).take(400)) {
-          batch.update(d.reference, {
-            'assignedServantId': servant?.id,
-            'assignedServantName': servant?.name,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        for (final (ref, fields) in related.skip(i).take(400)) {
+          batch.update(ref, fields);
         }
         await batch.commit();
       }
