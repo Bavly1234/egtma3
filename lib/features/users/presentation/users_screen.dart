@@ -69,8 +69,11 @@ class UsersScreen extends ConsumerWidget {
     if (ok != true || !context.mounted) return;
     await runGuarded(
       context,
-      () => ref.read(usersRepositoryProvider)
-          .createServant(name: name.text, email: email.text, phone: phone.text),
+      () => ref.read(usersRepositoryProvider).createServant(
+          name: name.text,
+          email: email.text,
+          phone: phone.text,
+          actor: ref.read(requireUserProvider)),
       successMessage: 'تمت إضافة الخادمة وإرسال رابط كلمة المرور',
     );
   }
@@ -96,7 +99,7 @@ class UsersScreen extends ConsumerWidget {
               label: const Text('تعيين السيدات وتوزيع العمل'),
             ),
             const SizedBox(height: 12),
-            for (final u in users) _UserCard(user: u, isMe: u.id == me.id),
+            for (final u in users) _UserCard(user: u, isMe: u.id == me.id, me: me),
           ],
         ),
       ),
@@ -105,9 +108,10 @@ class UsersScreen extends ConsumerWidget {
 }
 
 class _UserCard extends ConsumerWidget {
-  const _UserCard({required this.user, required this.isMe});
+  const _UserCard({required this.user, required this.isMe, required this.me});
   final AppUser user;
   final bool isMe;
+  final AppUser me;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -146,7 +150,7 @@ class _UserCard extends ConsumerWidget {
                             : 'ستتمكن "${user.name}" من الدخول مرة أخرى.',
                         destructive: user.active);
                     if (ok && context.mounted) {
-                      await runGuarded(context, () => repo.setActive(user.id, !user.active),
+                      await runGuarded(context, () => repo.setActive(user, !user.active, me),
                           successMessage: 'تم');
                     }
                   },
@@ -175,7 +179,7 @@ class _UserCard extends ConsumerWidget {
                         message: 'تغيير صلاحية "${user.name}" إلى "${newRole.label}"؟',
                         destructive: newRole == UserRole.father);
                     if (ok && context.mounted) {
-                      await runGuarded(context, () => repo.setRole(user.id, newRole),
+                      await runGuarded(context, () => repo.setRole(user, newRole, me),
                           successMessage: 'تم');
                     }
                   },

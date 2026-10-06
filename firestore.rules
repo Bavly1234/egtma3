@@ -1,61 +1,89 @@
 rules_version = '2';
 
-// Egtma3 security rules.
-// Roles live in users/{uid}.role ('father' | 'servant') and are only writable
-// by Cloud Functions (Admin SDK) or the father. Server-maintained counters on
-// women, meetings and suggestions are never writable by servants.
+// Egtma3 security rules — free Spark plan edition (no Cloud Functions).
+//
+// The app itself maintains summaries (absence streaks, suggestions, meeting
+// counters, notifications), so these rules allow exactly those writes and
+// nothing more:
+//  * roles live in users/{uid}.role and only the father can change them;
+//  * servants can only touch women assigned to them and their records;
+//  * history (follow_ups, audit_logs) is append-only;
+//  * notifications can be created once but never overwritten (de-duplication).
+//
+// SETUP CODE: the first father account can be created only with the code in
+// `setupCode()` below, and only once. Keep this file private (do not publish
+// it); change the code before deploying if it was ever shared.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function setupCode() { return '-LyLiukky2KRoxGr'; }
+
     // ---------- helpers ----------
     function signedIn() { return request.auth != null; }
-    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function isActive() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && me().active == true; }
+    function userDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function me() { return get(userDoc()).data; }
+    function isActive() { return signedIn() && exists(userDoc()) && me().active == true; }
     function isFather() { return isActive() && me().role == 'father'; }
     function isServant() { return isActive() && me().role == 'servant'; }
-    function woman(id) { return get(/databases/$(database)/documents/women/$(id)).data; }
+    function womanPath(id) { return /databases/$(database)/documents/women/$(id); }
     function assignedToMe(womanId) {
-      return isServant() && exists(/databases/$(database)/documents/women/$(womanId))
-        && woman(womanId).assignedServantId == request.auth.uid;
+      return isServant() && exists(womanPath(womanId))
+        && get(womanPath(womanId)).data.assignedServantId == request.auth.uid;
     }
+    function staffFor(womanId) { return isFather() || assignedToMe(womanId); }
     function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function onlyChanges(keys) { return changes().hasOnly(keys); }
     function isStatus(s) { return s == 'present' || s == 'absent'; }
     function str(v, max) { return v is string && v.size() <= max; }
+    function bootstrapPath() { return /databases/$(database)/documents/settings/bootstrap; }
+    function isBootstrapping() {
+      return signedIn() && !exists(bootstrapPath()) && existsAfter(bootstrapPath())
+        && getAfter(bootstrapPath()).data.fatherId == request.auth.uid
+        && getAfter(bootstrapPath()).data.code == setupCode();
+    }
 
     // ---------- users ----------
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isFather();
-      // Users may only touch their own preferences, font size and push tokens.
-      allow update: if signedIn() && request.auth.uid == uid
-        && onlyChanges(['notificationPrefs', 'textScale', 'fcmTokens', 'updatedAt'])
-        || isFather() && !changes().hasAny(['role', 'active']);
-      allow create, delete: if false; // Cloud Functions only
+      allow create: if (isFather()
+          && request.resource.data.role == 'servant'
+          && request.resource.data.active == true
+          && str(request.resource.data.name, 120))
+        || (request.auth.uid == uid && isBootstrapping()
+          && request.resource.data.role == 'father'
+          && request.resource.data.active == true);
+      // Users may edit their own preferences; the father edits others
+      // (including role/active) but never his own role/active.
+      allow update: if (signedIn() && request.auth.uid == uid
+          && onlyChanges(['notificationPrefs', 'textScale', 'fcmTokens', 'updatedAt']))
+        || (isFather() && request.auth.uid != uid
+          && request.resource.data.role in ['father', 'servant']);
+      allow delete: if false;
     }
 
     // ---------- women ----------
+    // Summary fields maintained by the app's follow-up engine.
+    function summaryFields() {
+      return ['consecutiveAbsences', 'totalPresent', 'totalAbsent', 'lastAttendanceDate',
+              'activeSuggestionType', 'phoneCalls', 'homeVisits', 'lastCallAt', 'lastVisitAt',
+              'notes', 'updatedAt'];
+    }
     match /women/{id} {
       allow read: if isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid);
       allow create: if isFather()
         && str(request.resource.data.fullName, 200) && request.resource.data.fullName.size() >= 3
         && str(request.resource.data.phone, 20)
         && request.resource.data.active is bool;
-      allow update: if (isFather()
-          && !changes().hasAny(['consecutiveAbsences', 'totalPresent', 'totalAbsent', 'phoneCalls',
-                                'homeVisits', 'lastCallAt', 'lastVisitAt', 'lastAttendanceDate', 'activeSuggestionType'])
-          && request.resource.data.fullName.size() >= 3)
+      allow update: if (isFather() && request.resource.data.fullName.size() >= 3)
         || (isServant() && resource.data.assignedServantId == request.auth.uid
-          && onlyChanges(['notes', 'updatedAt']) && str(request.resource.data.notes, 2000));
+          && onlyChanges(summaryFields())
+          && (!('notes' in request.resource.data) || str(request.resource.data.notes, 2000)));
       allow delete: if isFather();
     }
 
     match /streets/{id} {
       allow read: if isActive();
-      // womenCount is maintained by Cloud Functions only.
-      allow create: if isFather() && str(request.resource.data.name, 120)
-        && !request.resource.data.keys().hasAny(['womenCount']);
-      allow update: if isFather() && str(request.resource.data.name, 120)
-        && onlyChanges(['name', 'nameNormalized', 'updatedAt']);
+      allow create, update: if isFather() && str(request.resource.data.name, 120);
       allow delete: if isFather();
     }
 
@@ -73,9 +101,12 @@ service cloud.firestore {
       allow delete: if isFather() || (isServant() && resource.data.servantId == request.auth.uid);
     }
 
+    // Dashboard counters, incremented by the app together with each mark.
     match /meetings/{id} {
       allow read: if isActive();
-      allow write: if false; // maintained by Cloud Functions
+      allow write: if isActive() && id.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['present', 'absent', 'byStreet', 'byServant', 'updatedAt']);
+      allow delete: if isFather();
     }
 
     // ---------- follow-ups ----------
@@ -85,19 +116,25 @@ service cloud.firestore {
       allow create: if request.resource.data.servantId == request.auth.uid
         && request.resource.data.type in ['phone_call', 'home_visit', 'note']
         && str(request.resource.data.notes, 2000)
-        && (isFather() || assignedToMe(request.resource.data.womanId));
+        && staffFor(request.resource.data.womanId);
       allow update: if false; // history is immutable
       allow delete: if isFather();
     }
 
-    // Suggestions are created by Cloud Functions; staff may only change status.
+    // Suggestions are created by the app's rules engine with deterministic
+    // ids ({womanId}_{type}_{streakStart}); staff may then change status.
     match /follow_up_suggestions/{id} {
       allow read: if isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid);
-      allow update: if (isFather() || (isServant() && resource.data.assignedServantId == request.auth.uid))
-        && onlyChanges(['status', 'updatedAt', 'completedAt', 'completedBy', 'followUpId'])
-        && request.resource.data.status in ['pending', 'assigned', 'in_progress', 'completed', 'dismissed']
-        && (request.resource.data.status != 'dismissed' || isFather());
-      allow create, delete: if false;
+      allow create: if staffFor(request.resource.data.womanId)
+        && id == request.resource.data.womanId + '_' + request.resource.data.type + '_' + request.resource.data.streakStartMeetingId
+        && request.resource.data.type in ['phone', 'home_visit']
+        && request.resource.data.status == 'pending';
+      allow update: if (isFather()
+          || (isServant() && resource.data.assignedServantId == request.auth.uid
+            && onlyChanges(['status', 'updatedAt', 'completedAt', 'completedBy', 'followUpId', 'cancelReason'])
+            && request.resource.data.status != 'dismissed'))
+        && request.resource.data.status in ['pending', 'assigned', 'in_progress', 'completed', 'dismissed', 'cancelled'];
+      allow delete: if isFather();
     }
 
     // ---------- conferences (separate from Wednesday attendance) ----------
@@ -120,10 +157,18 @@ service cloud.firestore {
     }
 
     // ---------- notifications ----------
+    // Created by the app; create-only, so an existing id is never overwritten
+    // (that rejection is how duplicates are prevented).
     match /notifications/{id} {
       allow read: if signedIn() && resource.data.recipientId == request.auth.uid;
+      allow create: if isActive()
+        && str(request.resource.data.recipientId, 128)
+        && str(request.resource.data.title, 300)
+        && str(request.resource.data.message, 1000)
+        && request.resource.data.type in ['attendance', 'follow_up', 'birthday', 'conference', 'system', 'reminder', 'verse']
+        && request.resource.data.readAt == null;
       allow update: if signedIn() && resource.data.recipientId == request.auth.uid && onlyChanges(['readAt']);
-      allow create, delete: if false; // Cloud Functions only
+      allow delete: if isFather();
     }
 
     // ---------- content & settings ----------
@@ -134,9 +179,15 @@ service cloud.firestore {
     match /verse_pool/{id} {
       allow read, write: if isFather();
     }
-    match /settings/{id} {
+    match /settings/bootstrap {
+      allow read: if false;
+      allow create: if signedIn() && request.resource.data.fatherId == request.auth.uid
+        && request.resource.data.code == setupCode();
+      allow update, delete: if false;
+    }
+    match /settings/app {
       allow read: if isActive();
-      allow write: if isFather();
+      allow write: if isFather() || isBootstrapping();
     }
 
     // ---------- audit log: append-only ----------

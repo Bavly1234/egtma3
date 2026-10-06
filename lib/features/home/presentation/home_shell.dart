@@ -1,14 +1,13 @@
 import 'dart:async';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/routes.dart';
-import '../../../core/services/messaging_service.dart';
-import '../../../core/widgets/feedback.dart';
+import '../../../core/services/local_notifications.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../notifications/data/reminder_service.dart';
 
 class _Tab {
   const _Tab(this.branch, this.icon, this.label);
@@ -18,6 +17,7 @@ class _Tab {
 }
 
 /// Bottom navigation. Servants get 5 tabs; the father also gets statistics.
+/// Also owns the device notification engine for the signed-in user.
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.shell});
   final StatefulNavigationShell shell;
@@ -26,10 +26,10 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell> {
-  StreamSubscription<RemoteMessage>? _fg;
-  StreamSubscription<RemoteMessage>? _opened;
-  String? _registeredUid;
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
+  StreamSubscription<String>? _taps;
+  String? _startedFor;
 
   static const _servantTabs = [
     _Tab(0, Icons.home, 'الرئيسية'),
@@ -50,47 +50,60 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    final messaging = ref.read(messagingServiceProvider);
-    _fg = messaging.foregroundMessages.listen((m) {
-      final n = m.notification;
-      if (n != null && mounted) {
-        AppToast.info(context, '${n.title ?? ''}\n${n.body ?? ''}'.trim());
-      }
-    });
-    _opened = messaging.openedMessages.listen(_openFromPush);
+    WidgetsBinding.instance.addObserver(this);
+    final local = LocalNotifications.instance;
+    _taps = local.taps.listen(_open);
+    final launch = local.launchPayload;
+    if (launch != null) {
+      local.launchPayload = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _open(launch));
+    }
   }
 
-  void _openFromPush(RemoteMessage m) {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-plan reminders when the app comes back (new birthdays, counts...).
+    final user = ref.read(currentUserProvider).value;
+    if (state == AppLifecycleState.resumed && user != null) {
+      ref.read(reminderServiceProvider).refresh(user);
+    }
+  }
+
+  void _open(String payload) {
     if (!mounted) return;
-    final type = m.data['relatedEntityType'];
-    final id = m.data['relatedEntityId'];
-    if (type == 'woman' && id is String) {
-      context.push(Routes.woman(id));
-    } else if (type == 'suggestion') {
-      context.go(Routes.followUps);
-    } else if (type == 'conference' && id is String) {
-      context.push(Routes.conference(id));
-    } else {
-      context.push(Routes.notifications);
+    final i = payload.indexOf(':');
+    if (i < 0) return;
+    final kind = payload.substring(0, i);
+    final value = payload.substring(i + 1);
+    switch (kind) {
+      case 'woman':
+        context.push(Routes.woman(value));
+      case 'conference':
+        context.push(Routes.conference(value));
+      case 'route':
+        value == Routes.attendance || value == Routes.followUps
+            ? context.go(value)
+            : context.push(value);
     }
   }
 
   @override
   void dispose() {
-    _fg?.cancel();
-    _opened?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _taps?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).value;
-    if (user != null && _registeredUid != user.id) {
-      _registeredUid = user.id;
-      ref.read(messagingServiceProvider).registerFor(user.id);
+    if (user != null && _startedFor != user.id) {
+      _startedFor = user.id;
+      ref.read(reminderServiceProvider).start(user);
     }
     final tabs = (user?.isFather ?? false) ? _fatherTabs : _servantTabs;
-    final current = tabs.indexWhere((t) => t.branch == widget.shell.currentIndex);
+    final current =
+        tabs.indexWhere((t) => t.branch == widget.shell.currentIndex);
 
     return Scaffold(
       body: widget.shell,

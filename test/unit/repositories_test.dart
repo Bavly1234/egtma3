@@ -4,7 +4,9 @@ import 'package:egtma3/features/attendance/data/attendance_repository.dart';
 import 'package:egtma3/features/audit/data/audit_repository.dart';
 import 'package:egtma3/features/auth/domain/app_user.dart';
 import 'package:egtma3/features/conferences/data/conference_repository.dart';
+import 'package:egtma3/features/followups/data/absence_processor.dart';
 import 'package:egtma3/features/followups/data/follow_up_repository.dart';
+import 'package:egtma3/features/notifications/data/notification_writer.dart';
 import 'package:egtma3/features/followups/domain/follow_up.dart';
 import 'package:egtma3/features/notifications/data/notification_repository.dart';
 import 'package:egtma3/features/streets/data/street_repository.dart';
@@ -76,9 +78,10 @@ void main() {
 
   test('attendance: marking twice never duplicates (deterministic id)', () async {
     final w = await addWoman('مريم أحمد', servantId: 's1');
-    final repo = AttendanceRepository(db);
+    final repo = AttendanceRepository(db, audit);
     await repo.mark('2026-09-30', w, AttendanceStatus.absent, servant);
-    await repo.mark('2026-09-30', w, AttendanceStatus.present, servant);
+    await repo.mark('2026-09-30', w, AttendanceStatus.present, servant,
+        previous: AttendanceStatus.absent);
     final docs = await db.collection(FsPaths.attendance).get();
     expect(docs.size, 1);
     expect(docs.docs.single.get('status'), 'present');
@@ -86,6 +89,10 @@ void main() {
     expect(statuses[w.id], AttendanceStatus.present);
     final history = await repo.history(w.id, servant);
     expect(history.single.meetingId, '2026-09-30');
+    // Meeting counters reflect only the final status.
+    final m = (await db.collection(FsPaths.meetings).doc('2026-09-30').get()).data()!;
+    expect(m['present'], 1);
+    expect(m['absent'], 0);
   });
 
   test('Rule F: conference attendance does not touch Wednesday attendance', () async {
@@ -120,7 +127,7 @@ void main() {
     });
     final s = FollowUpSuggestion.fromMap(
         'sg1', (await db.collection(FsPaths.suggestions).doc('sg1').get()).data()!);
-    final repo = FollowUpRepository(db, audit);
+    final repo = FollowUpRepository(db, audit, AbsenceProcessor(db, NotificationWriter(db)));
     await repo.record(
       woman: w,
       type: FollowUpType.phoneCall,
@@ -135,6 +142,9 @@ void main() {
     expect((await db.collection(FsPaths.suggestions).doc('sg1').get()).get('status'), 'completed');
     final history = await repo.watchHistory(w.id, servant).first;
     expect(history.single.type, FollowUpType.phoneCall);
+    final updated = (await db.collection(FsPaths.women).doc(w.id).get()).data()!;
+    expect(updated['phoneCalls'], 1);
+    expect(updated['lastCallAt'], isNotNull);
   });
 
   test('notification center: mark all read', () async {

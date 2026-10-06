@@ -15,17 +15,6 @@ abstract final class FsPaths {
   static const versePool = 'verse_pool';
   static const settings = 'settings';
   static const settingsAppDoc = 'app';
+  static const settingsBootstrapDoc = 'bootstrap';
   static const auditLogs = 'audit_logs';
 }
-
-/// Cloud Functions callable names.
-abstract final class FnNames {
-  static const createServant = 'createServant';
-  static const setUserActive = 'setUserActive';
-  static const setUserRole = 'setUserRole';
-  static const bootstrapFather = 'bootstrapFather';
-  static const seedDemoData = 'seedDemoData';
-  static const removeDemoData = 'removeDemoData';
-}
-
-const kFunctionsRegion = 'us-central1';

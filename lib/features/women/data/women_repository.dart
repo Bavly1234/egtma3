@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/business_rules.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
@@ -101,6 +102,42 @@ class WomenRepository {
     return out;
   }
 
+  DocumentReference<Map<String, dynamic>> _street(String id) =>
+      _db.collection(FsPaths.streets).doc(id);
+
+  void _countStreet(WriteBatch b, String? streetId, int delta) {
+    if (streetId == null || streetId.isEmpty) return;
+    b.set(_street(streetId), {'womenCount': FieldValue.increment(delta)},
+        SetOptions(merge: true));
+  }
+
+  /// Active suggestions of the given women (father-only use).
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _activeSuggestions(
+      List<String> womanIds) async {
+    final out = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    for (var i = 0; i < womanIds.length; i += 30) {
+      final chunk = womanIds.sublist(i, (i + 30).clamp(0, womanIds.length));
+      final snap = await _db
+          .collection(FsPaths.suggestions)
+          .where('womanId', whereIn: chunk)
+          .where('status', whereIn: SuggestionStatus.activeWires)
+          .get();
+      out.addAll(snap.docs);
+    }
+    return out;
+  }
+
+  Future<void> _cancelSuggestions(WriteBatch b, String womanId, String reason) async {
+    for (final d in await _activeSuggestions([womanId])) {
+      b.update(d.reference, {
+        'status': SuggestionStatus.cancelled.wire,
+        'cancelReason': reason,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    b.update(col.doc(womanId), {'activeSuggestionType': 'none'});
+  }
+
   Stream<Woman?> watch(String id) => col.doc(id).snapshots().map(
       (s) => s.exists ? Woman.fromMap(s.id, s.data()!) : null);
 
@@ -108,6 +145,7 @@ class WomenRepository {
     try {
       final batch = _db.batch();
       final streetId = _streets.upsertInBatch(batch, draft.streetName);
+      _countStreet(batch, streetId, 1);
       final ref = col.doc();
       batch.set(ref, {
         ...draft.toFields(streetId),
@@ -136,8 +174,14 @@ class WomenRepository {
 
   Future<void> update(String id, WomanDraft draft, AppUser actor) async {
     try {
+      final old = (await col.doc(id).get()).data();
       final batch = _db.batch();
       final streetId = _streets.upsertInBatch(batch, draft.streetName);
+      final oldStreet = old?['streetId'] as String?;
+      if (oldStreet != streetId) {
+        _countStreet(batch, oldStreet, -1);
+        _countStreet(batch, streetId, 1);
+      }
       batch.update(col.doc(id), {
         ...draft.toFields(streetId),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -177,6 +221,7 @@ class WomenRepository {
       final batch = _db.batch();
       batch.update(col.doc(id),
           {'active': active, 'updatedAt': FieldValue.serverTimestamp()});
+      if (!active) await _cancelSuggestions(batch, id, 'deactivated');
       _audit.addToBatch(batch,
           actor: actor,
           action: active ? AuditAction.womanUpdated : AuditAction.womanDisabled,
@@ -192,7 +237,16 @@ class WomenRepository {
   /// Hard delete (father only). History records stay for statistics.
   Future<void> delete(String id, String name, AppUser actor) async {
     try {
+      final old = (await col.doc(id).get()).data();
       final batch = _db.batch();
+      for (final d in await _activeSuggestions([id])) {
+        batch.update(d.reference, {
+          'status': SuggestionStatus.cancelled.wire,
+          'cancelReason': 'deleted',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      _countStreet(batch, old?['streetId'] as String?, -1);
       batch.delete(col.doc(id));
       _audit.addToBatch(batch,
           actor: actor,
@@ -210,6 +264,18 @@ class WomenRepository {
   Future<void> assign(
       List<String> womanIds, AppUser? servant, AppUser actor) async {
     try {
+      final open = await _activeSuggestions(womanIds);
+      for (var i = 0; i < open.length; i += 400) {
+        final batch = _db.batch();
+        for (final d in open.skip(i).take(400)) {
+          batch.update(d.reference, {
+            'assignedServantId': servant?.id,
+            'assignedServantName': servant?.name,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
       for (var i = 0; i < womanIds.length; i += 200) {
         final chunk = womanIds.skip(i).take(200);
         final batch = _db.batch();

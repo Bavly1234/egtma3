@@ -5,12 +5,14 @@ import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
+import '../../../core/services/offline_write.dart';
 import '../../audit/data/audit_repository.dart';
 import '../../audit/domain/audit_entry.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
 import '../../women/domain/woman.dart';
 import '../domain/follow_up.dart';
+import 'absence_processor.dart';
 
 class SuggestionQuery {
   const SuggestionQuery({
@@ -37,9 +39,10 @@ class SuggestionQuery {
 }
 
 class FollowUpRepository {
-  FollowUpRepository(this._db, this._audit);
+  FollowUpRepository(this._db, this._audit, this._processor);
   final FirebaseFirestore _db;
   final AuditRepository _audit;
+  final AbsenceProcessor _processor;
 
   CollectionReference<Map<String, dynamic>> get _followUps =>
       _db.collection(FsPaths.followUps);
@@ -87,7 +90,7 @@ class FollowUpRepository {
     AppUser actor,
   ) async {
     try {
-      await _suggestions.doc(s.id).update({
+      final write = _suggestions.doc(s.id).update({
         'status': status.wire,
         'updatedAt': FieldValue.serverTimestamp(),
         if (status == SuggestionStatus.completed) ...{
@@ -95,6 +98,8 @@ class FollowUpRepository {
           'completedBy': actor.id,
         },
       });
+      _processor.refreshActiveType(s.womanId, actor);
+      await commitOrQueue(write);
     } catch (e, st) {
       throw AppFailure.from(e, st);
     }
@@ -103,8 +108,8 @@ class FollowUpRepository {
   // ---------- Follow-up records ----------
 
   /// Records a call/visit/note. If it resolves a suggestion, the suggestion is
-  /// completed in the same atomic batch. Counters on the woman are updated by
-  /// Cloud Functions from these records (never incremented blindly here).
+  /// completed in the same atomic batch, together with the woman's call/visit
+  /// summary — every counter change is paired with its historical record.
   Future<void> record({
     required Woman woman,
     required FollowUpType type,
@@ -142,6 +147,16 @@ class FollowUpRepository {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
+      final when = occurredAt != null
+          ? Timestamp.fromDate(occurredAt)
+          : FieldValue.serverTimestamp();
+      if (type == FollowUpType.phoneCall) {
+        batch.update(_db.collection(FsPaths.women).doc(woman.id),
+            {'phoneCalls': FieldValue.increment(1), 'lastCallAt': when});
+      } else if (type == FollowUpType.homeVisit) {
+        batch.update(_db.collection(FsPaths.women).doc(woman.id),
+            {'homeVisits': FieldValue.increment(1), 'lastVisitAt': when});
+      }
       _audit.addToBatch(batch,
           actor: actor,
           action: completes != null
@@ -150,7 +165,11 @@ class FollowUpRepository {
           entityType: 'woman',
           entityId: woman.id,
           summary: '${type.label} — ${woman.fullName}');
-      await batch.commit();
+      final write = batch.commit();
+      if (completes != null) {
+        _processor.refreshActiveType(woman.id, actor);
+      }
+      await commitOrQueue(write);
     } catch (e, st) {
       throw AppFailure.from(e, st);
     }
@@ -194,7 +213,9 @@ class FollowUpRepository {
 }
 
 final followUpRepositoryProvider = Provider((ref) => FollowUpRepository(
-    ref.watch(firestoreProvider), ref.watch(auditRepositoryProvider)));
+    ref.watch(firestoreProvider),
+    ref.watch(auditRepositoryProvider),
+    ref.watch(absenceProcessorProvider)));
 
 final suggestionsProvider = StreamProvider.family<List<FollowUpSuggestion>,
     SuggestionQuery>((ref, q) {

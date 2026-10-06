@@ -1,48 +1,100 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
+import '../../../firebase_options.dart';
+import '../../audit/data/audit_repository.dart';
+import '../../audit/domain/audit_entry.dart';
 import '../../auth/domain/app_user.dart';
 
-/// User management. Account creation/disable/role changes go through Cloud
-/// Functions because they need the Admin SDK and must be authorised
-/// server-side.
+const _defaultPrefs = {
+  'meetingReminder': true,
+  'attendanceReminder': true,
+  'followUp': true,
+  'birthday': true,
+  'conference': true,
+  'dailyVerse': true,
+};
+
+/// User management without a server (free Spark plan).
+///
+/// * New servant accounts are created through a *secondary* Firebase app, so
+///   the father stays signed in. The account gets a random password and the
+///   servant receives a reset email to choose her own (no shared passwords).
+/// * Disabling sets `active: false`; security rules then deny the account
+///   every read and write, and the app shows "الحساب غير مفعّل".
+/// * Roles are enforced by firestore.rules (only the father can change them).
 class UsersRepository {
-  UsersRepository(this._db, this._fns, this._auth);
+  UsersRepository(this._db, this._auth, this._audit);
   final FirebaseFirestore _db;
-  final FirebaseFunctions _fns;
   final FirebaseAuth _auth;
+  final AuditRepository _audit;
 
-  Stream<List<AppUser>> watchAll() => _db
-      .collection(FsPaths.users)
-      .orderBy('name')
-      .snapshots()
-      .map((s) => s.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList());
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _db.collection(FsPaths.users);
+  DocumentReference<Map<String, dynamic>> get _settings =>
+      _db.collection(FsPaths.settings).doc(FsPaths.settingsAppDoc);
 
-  Future<T?> _call<T>(String name, Map<String, dynamic> data) async {
-    try {
-      final r = await _fns.httpsCallable(name).call<T>(data);
-      return r.data;
-    } catch (e, st) {
-      throw AppFailure.from(e, st);
-    }
+  Stream<List<AppUser>> watchAll() => _users.orderBy('name').snapshots().map(
+      (s) => s.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList());
+
+  static String _randomPassword() {
+    final r = Random.secure();
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#%';
+    return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  /// Creates the account with a random password, then emails the servant a
-  /// link to choose her own password (no shared passwords).
+  Future<FirebaseAuth> _secondaryAuth() async {
+    const name = 'egtma3-user-admin';
+    final app = Firebase.apps.where((a) => a.name == name).firstOrNull ??
+        await Firebase.initializeApp(
+            name: name, options: DefaultFirebaseOptions.currentPlatform);
+    return FirebaseAuth.instanceFor(app: app);
+  }
+
   Future<void> createServant({
     required String name,
     required String email,
     required String phone,
+    required AppUser actor,
   }) async {
-    await _call<Object?>(FnNames.createServant,
-        {'name': name.trim(), 'email': email.trim(), 'phone': phone.trim()});
-    await sendAccessReset(email);
+    try {
+      final secondary = await _secondaryAuth();
+      final cred = await secondary.createUserWithEmailAndPassword(
+          email: email.trim().toLowerCase(), password: _randomPassword());
+      final uid = cred.user!.uid;
+      await secondary.signOut();
+      final batch = _db.batch();
+      batch.set(_users.doc(uid), {
+        'name': name.trim(),
+        'email': email.trim().toLowerCase(),
+        'phone': phone.trim(),
+        'role': UserRole.servant.wire,
+        'active': true,
+        'notificationPrefs': _defaultPrefs,
+        'createdBy': actor.id,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      _audit.addToBatch(batch,
+          actor: actor,
+          action: AuditAction.userChanged,
+          entityType: 'user',
+          entityId: uid,
+          summary: 'إضافة خادمة: ${name.trim()}');
+      await batch.commit();
+      await sendAccessReset(email);
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
   }
 
   Future<void> sendAccessReset(String email) async {
@@ -54,26 +106,109 @@ class UsersRepository {
     }
   }
 
-  Future<void> setActive(String uid, bool active) =>
-      _call<Object?>(FnNames.setUserActive, {'uid': uid, 'active': active});
+  Future<void> setActive(AppUser user, bool active, AppUser actor) async {
+    if (user.id == actor.id) {
+      throw const AppFailure('لا يمكنك إيقاف حسابك.');
+    }
+    try {
+      final batch = _db.batch();
+      batch.update(_users.doc(user.id),
+          {'active': active, 'updatedAt': FieldValue.serverTimestamp()});
+      if (user.isFather) {
+        batch.set(
+            _settings,
+            {
+              'fatherIds': active
+                  ? FieldValue.arrayUnion([user.id])
+                  : FieldValue.arrayRemove([user.id])
+            },
+            SetOptions(merge: true));
+      }
+      _audit.addToBatch(batch,
+          actor: actor,
+          action: AuditAction.userChanged,
+          entityType: 'user',
+          entityId: user.id,
+          summary: '${active ? 'تفعيل' : 'إيقاف'}: ${user.name}');
+      await batch.commit();
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
 
-  Future<void> setRole(String uid, UserRole role) =>
-      _call<Object?>(FnNames.setUserRole, {'uid': uid, 'role': role.wire});
+  Future<void> setRole(AppUser user, UserRole role, AppUser actor) async {
+    if (user.id == actor.id) {
+      throw const AppFailure('لا يمكنك تغيير صلاحيتك.');
+    }
+    try {
+      final batch = _db.batch();
+      batch.update(_users.doc(user.id),
+          {'role': role.wire, 'updatedAt': FieldValue.serverTimestamp()});
+      batch.set(
+          _settings,
+          {
+            'fatherIds': role == UserRole.father && user.active
+                ? FieldValue.arrayUnion([user.id])
+                : FieldValue.arrayRemove([user.id])
+          },
+          SetOptions(merge: true));
+      _audit.addToBatch(batch,
+          actor: actor,
+          action: AuditAction.userChanged,
+          entityType: 'user',
+          entityId: user.id,
+          summary: '${user.name}: ${role.label}');
+      await batch.commit();
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
 
-  Future<void> bootstrapFather(String code, String name) =>
-      _call<Object?>(FnNames.bootstrapFather, {'code': code, 'name': name});
-
-  Future<String> seedDemo() async =>
-      (await _call<Object?>(FnNames.seedDemoData, {}))?.toString() ?? '';
-
-  Future<String> removeDemo() async =>
-      (await _call<Object?>(FnNames.removeDemoData, {}))?.toString() ?? '';
+  /// One-time creation of the first father account. The [code] must match
+  /// the setup code embedded in firestore.rules, and the rules allow this
+  /// only while `settings/bootstrap` does not exist — so it works exactly once.
+  Future<void> bootstrapFather({
+    required String uid,
+    required String email,
+    required String name,
+    required String code,
+  }) async {
+    try {
+      final batch = _db.batch();
+      batch.set(
+          _db.collection(FsPaths.settings).doc(FsPaths.settingsBootstrapDoc), {
+        'fatherId': uid,
+        'code': code,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.set(_users.doc(uid), {
+        'name': name.trim(),
+        'email': email,
+        'phone': '',
+        'role': UserRole.father.wire,
+        'active': true,
+        'notificationPrefs': _defaultPrefs,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      batch.set(_settings, {'fatherIds': [uid]}, SetOptions(merge: true));
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const AppFailure(
+            'رمز الإعداد غير صحيح، أو تم إعداد حساب الأب الكاهن من قبل.');
+      }
+      throw AppFailure.from(e);
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
 }
 
 final usersRepositoryProvider = Provider((ref) => UsersRepository(
       ref.watch(firestoreProvider),
-      ref.watch(functionsProvider),
       ref.watch(firebaseAuthProvider),
+      ref.watch(auditRepositoryProvider),
     ));
 
 /// All users (father only — rules deny servants listing users).

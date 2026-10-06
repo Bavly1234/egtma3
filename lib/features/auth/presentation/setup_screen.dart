@@ -51,9 +51,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               email: _email.text.trim(), password: _password.text);
         }
       }
-      await ref
-          .read(usersRepositoryProvider)
-          .bootstrapFather(_code.text.trim(), _name.text.trim());
+      final u = auth.currentUser!;
+      await ref.read(usersRepositoryProvider).bootstrapFather(
+            uid: u.uid,
+            email: u.email ?? _email.text.trim(),
+            name: _name.text.trim(),
+            code: _code.text.trim(),
+          );
     }, successMessage: 'تم إعداد حساب الأب الكاهن بنجاح.');
     if (!mounted) return;
     setState(() => _busy = false);
@@ -89,7 +93,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                         borderRadius: BorderRadius.circular(12)),
                     child: const Text(
                       'هذه الصفحة لإنشاء حساب الأب الكاهن لأول مرة فقط. '
-                      'تحتاج إلى "رمز الإعداد" الموجود في إعدادات الخادم.',
+                      'تحتاج إلى "رمز الإعداد" الذي أعطاه لك المطوّر.',
                       style: TextStyle(fontSize: 17),
                     ),
                   ),

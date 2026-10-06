@@ -34,12 +34,21 @@ class StreetRepository {
 
   Future<void> rename(String id, String newName) async {
     try {
-      // Women keep a denormalised streetName; a function propagates it.
       await _col.doc(id).update({
         'name': newName.trim(),
         'nameNormalized': ArabicText.normalize(newName),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      // Women keep a denormalised streetName: propagate the rename.
+      final women =
+          await _db.collection(FsPaths.women).where('streetId', isEqualTo: id).get();
+      for (var i = 0; i < women.docs.length; i += 400) {
+        final b = _db.batch();
+        for (final d in women.docs.skip(i).take(400)) {
+          b.update(d.reference, {'streetName': newName.trim()});
+        }
+        await b.commit();
+      }
     } catch (e, st) {
       throw AppFailure.from(e, st);
     }

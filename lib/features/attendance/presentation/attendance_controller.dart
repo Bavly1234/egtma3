@@ -6,6 +6,7 @@ import '../../../core/services/sync_status.dart';
 import '../../../core/utils/arabic_text.dart';
 import '../../../core/utils/dates.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../followups/data/absence_processor.dart';
 import '../../women/data/women_repository.dart';
 import '../../women/domain/woman.dart';
 import '../../women/domain/women_filter.dart';
@@ -87,30 +88,50 @@ final meetingStatusesProvider =
 });
 
 /// Writes go straight to Firestore's offline cache (instant UI update via the
-/// statuses stream) and are tracked for the sync indicator.
+/// statuses stream) and are tracked for the sync indicator. After each write
+/// the on-device [AbsenceProcessor] applies the follow-up rules.
 class AttendanceActions {
   AttendanceActions(this.ref);
   final Ref ref;
 
-  void mark(Woman w, AttendanceStatus status) {
-    final meetingId = Dates.dayId(ref.read(meetingDateProvider));
-    ref.read(syncControllerProvider.notifier).track(ref
-        .read(attendanceRepositoryProvider)
-        .mark(meetingId, w, status, ref.read(requireUserProvider)));
-  }
+  Map<String, AttendanceStatus> get _current =>
+      ref.read(meetingStatusesProvider).value ?? const {};
+
+  void mark(Woman w, AttendanceStatus status) => markAll([w], status);
 
   void clear(Woman w) {
+    final prev = _current[w.id];
+    if (prev == null) return;
     final meetingId = Dates.dayId(ref.read(meetingDateProvider));
-    ref
-        .read(syncControllerProvider.notifier)
-        .track(ref.read(attendanceRepositoryProvider).clear(meetingId, w.id));
+    _track(ref.read(attendanceRepositoryProvider).clear(meetingId, w, prev), [w]);
   }
 
   void markAll(List<Woman> women, AttendanceStatus status) {
     final meetingId = Dates.dayId(ref.read(meetingDateProvider));
-    ref.read(syncControllerProvider.notifier).track(ref
-        .read(attendanceRepositoryProvider)
-        .markMany(meetingId, women, status, ref.read(requireUserProvider)));
+    final user = ref.read(requireUserProvider);
+    final previous = Map.of(_current);
+    final changed = women.where((w) => previous[w.id] != status).toList();
+    if (changed.isEmpty) return;
+    _track(
+      ref.read(attendanceRepositoryProvider)
+          .markMany(meetingId, changed, status, user, previous: previous),
+      changed,
+    );
+  }
+
+  void _track(Future<void> write, List<Woman> affected) {
+    final sync = ref.read(syncControllerProvider.notifier);
+    final processor = ref.read(absenceProcessorProvider);
+    final user = ref.read(requireUserProvider);
+    // The batch is applied to the local cache as soon as commit() is called,
+    // so the rules can run immediately — even offline — without waiting for
+    // the server acknowledgement (which never comes while offline).
+    sync.track(write);
+    sync.track(Future(() async {
+      for (final w in affected) {
+        await processor.process(w, user);
+      }
+    }));
   }
 }
 

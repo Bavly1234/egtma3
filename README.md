@@ -2,8 +2,12 @@
 
 A Flutter + Firebase app for running a church women's meeting: Wednesday
 attendance, automatic follow-up (افتقاد) suggestions, servants' and women's
-statistics, three-day conferences, birthdays, a daily Bible verse, push
+statistics, three-day conferences, birthdays, a daily Bible verse, phone
 notifications, and Excel import/export.
+
+**Runs entirely on Firebase's free Spark plan.** There are no Cloud
+Functions and no billing account. All automation runs inside the app,
+following the same approach as `eftekad_app`.
 
 The UI is Arabic and right-to-left, with large fonts and buttons designed for
 older users. Code and database fields are in English.
@@ -17,8 +21,8 @@ older users. Code and database fields are in English.
 | App | Flutter 3.47 (Dart 3.13), Riverpod 3, go_router |
 | Auth | Firebase Authentication (email/password) |
 | Database | Cloud Firestore (offline persistence on) |
-| Backend | Cloud Functions 2nd gen, TypeScript, Node 22, `us-central1` |
-| Push | Firebase Cloud Messaging |
+| Automation | On-device engine (no server): follow-up rules, counters, reminders |
+| Notifications | `flutter_local_notifications` (scheduled on the phone) + in-app notification center |
 | Quality | Crashlytics, Analytics, App Check |
 | Excel | `excel`, `file_picker`, `file_saver` |
 
@@ -31,45 +35,52 @@ Firebase project: **`egtma3-church-app`** (Firestore location `nam5`).
 ```
 lib/
   core/            constants (enums, Firestore paths, business rules), theme,
-                   shared widgets, services (sync status, FCM, dialer/WhatsApp),
+                   shared widgets, services (sync status, local notifications, dialer/WhatsApp),
                    routing (go_router + role guard), error mapping, logging
   features/<feature>/
     domain/        pure models + business logic (unit-tested, no Firebase)
     data/          repositories (the only code that talks to Firebase)
     presentation/  screens, widgets, Riverpod providers/controllers
-functions/src/
-  shared/          rules.ts (business rules), dates, notify, guards, admin
-  attendance/      onAttendanceWritten — absence analysis + suggestions
-  followups/       follow-up counters, activeSuggestionType
-  women/           street counts, reassignment propagation, renames
-  notifications/   FCM push trigger, reminder jobs
-  birthdays/       birthday notifications
-  verse/           daily verse publisher
-  scheduler/       hourlyTick — one scheduler drives all timed jobs
-  users/           createServant, setUserActive, setUserRole, bootstrapFather
-  demo/            seedDemoData / removeDemoData
 ```
 
 Each feature has its own `domain`, `data`, and `presentation` folders. Widgets
-contain no business logic: the rules live in `domain/` (Dart) and
-`functions/src/shared/rules.ts` (TypeScript), and both copies are tested.
+contain no business logic: the rules live in `domain/` and are unit-tested.
+
+### Free-plan design (no server)
+| Job a server would normally do | Where it runs now |
+|---|---|
+| Absence analysis → suggestions | `AbsenceProcessor` runs on the phone right after attendance is saved, even offline |
+| Meeting dashboard counters | Incremented in the same batch as each attendance mark |
+| Call/visit counters on a woman | Written in the same batch as the follow-up record |
+| Street counts, reassignment, cancelling on deactivate | `WomenRepository` |
+| Creating servant accounts | Father's phone, through a *secondary* Firebase app so he stays signed in |
+| Reminders (Tuesday, Wednesday, birthdays, conference, verse, pending follow-ups) | Scheduled on each phone with `flutter_local_notifications`; they fire even when the app is closed |
+| A new follow-up created on another phone | Saved to the notification center; the phone shows it immediately if the app is running, otherwise as a summary on next open |
+
+**Duplicate protection without a server.**
+- Suggestion ids are deterministic (`{woman}_{type}_{streakStart}`), so two
+  phones processing the same absence streak write the same document.
+- Notification ids are deterministic too, and the rules allow `create` but
+  never `update`, so a repeat is rejected.
+- Attendance ids are `{meeting}_{woman}`.
 
 ### Firestore collections
 
 | Collection | Contents |
 |---|---|
-| `users/{uid}` | name, email, phone, role (`father`/`servant`), active, notificationPrefs, textScale, fcmTokens |
-| `women/{id}` | fullName, nameNormalized, searchKeywords, streetId, streetName, address, phone (normalised), dateOfBirth, birthMonth, birthDay, active, assignedServantId/Name, notes. **Maintained by functions:** consecutiveAbsences, totalPresent, totalAbsent, phoneCalls, homeVisits, lastCallAt, lastVisitAt, lastAttendanceDate, activeSuggestionType |
-| `streets/{id}` | name, nameNormalized, womenCount (functions) |
+| `users/{uid}` | name, email, phone, role (`father`/`servant`), active, notificationPrefs, textScale |
+| `women/{id}` | fullName, nameNormalized, searchKeywords, streetId, streetName, address, phone (normalised), dateOfBirth, birthMonth, birthDay, active, assignedServantId/Name, notes. **Summary fields kept up to date by the app's follow-up engine:** consecutiveAbsences, totalPresent, totalAbsent, phoneCalls, homeVisits, lastCallAt, lastVisitAt, lastAttendanceDate, activeSuggestionType |
+| `streets/{id}` | name, nameNormalized, womenCount |
 | `attendance/{meetingId}_{womanId}` | meetingId (`yyyy-MM-dd`), womanId, servantId, streetId, status, markedBy, markedAt. The deterministic id makes duplicates impossible. |
-| `meetings/{yyyy-MM-dd}` | present/absent counters, byStreet, byServant (functions) |
+| `meetings/{yyyy-MM-dd}` | present/absent counters, byStreet, byServant |
 | `follow_ups/{id}` | Immutable history of calls, visits and notes: woman, servant, type, result, notes, occurredAt, suggestionId |
 | `follow_up_suggestions/{id}` | type (`phone`/`home_visit`), status, consecutiveAbsences, streakStartMeetingId, reason, assigned servant |
 | `conferences/{id}` | name, `days[3]` (id, index, date), dayIds |
 | `conference_attendance/{conf}_{day}_{woman}` | conferenceId, conferenceDayId, womanId, attendanceStatus, timestamp. Separate from Wednesday attendance. |
 | `notifications/{dedupeId}` | recipientId, title, message, type, relatedEntityId/Type, createdAt, readAt |
-| `daily_verses/{yyyy-MM-dd}`, `verse_pool/{id}` | Arabic verse text and reference |
-| `settings/app` | reminder hours, birthday and verse toggles |
+| `daily_verses/{yyyy-MM-dd}` | Optional per-day override of the bundled verse pool |
+| `settings/app` | reminder hours, birthday and verse toggles, `fatherIds` |
+| `settings/bootstrap` | One-time record of the first father setup |
 | `audit_logs/{id}` | append-only: action, actor, entity, summary, createdAt |
 
 **Design decisions**
@@ -98,11 +109,14 @@ contain no business logic: the rules live in `domain/` (Dart) and
 | Dismiss a suggestion | ❌ | ✅ |
 
 Permissions are enforced in three places: the UI (`Permissions`), the router
-guard (`Routes.isFatherOnly`), and, authoritatively, `firestore.rules` and the
-callable functions (`requireFather`). Servants cannot read women who are not
-assigned to them, cannot write server-maintained counters, and cannot create
-suggestions or notifications. Follow-up history and audit logs cannot be
-edited.
+guard (`Routes.isFatherOnly`), and, authoritatively, `firestore.rules`.
+- Servants can only read or write women assigned to them.
+- Servants can only change those women's notes and summary fields; they can't
+  rename or reassign them.
+- Servants can't dismiss suggestions or change any role.
+- Follow-up history and audit logs are append-only.
+- Disabling a servant sets `active: false`. The rules then deny her every
+  read and write, and the app shows "الحساب غير مفعّل".
 
 ---
 
@@ -123,10 +137,9 @@ are cancelled. Work already `in_progress` is kept.
 
 Statuses: `pending, assigned, in_progress, completed, dismissed, cancelled`.
 
-The authoritative implementation is `functions/src/attendance/onAttendanceWritten.ts`.
-It runs in a Firestore transaction, recomputes the streak from the attendance
-records, and calls `decide()` from `rules.ts`. The Dart mirror is
-`lib/features/attendance/domain/absence_rules.dart`.
+The rules are in `lib/features/attendance/domain/absence_rules.dart`.
+`AbsenceProcessor` applies them after every mark: it recomputes the streak
+from the attendance records and writes the suggestions in one batch.
 
 ### Other rules
 - **Rule F:** conference attendance lives in `conference_attendance` and never
@@ -136,19 +149,21 @@ records, and calls `decide()` from `rules.ts`. The Dart mirror is
   recipient. Feb 29 birthdays are celebrated on Feb 28 in non-leap years.
 - **Rule H:** Excel duplicates are skipped (see below).
 
-### Automation (`hourlyTick`, Africa/Cairo time)
-| Hour | Job |
+### Notifications (on the phone)
+| When | Notification |
 |---|---|
-| 06:00 | Publish آية اليوم and notify |
-| 08:00 | Birthday notifications to the servant (and the father, if enabled) |
-| 09:00 | Conference "tomorrow" / "today" reminders |
-| settings (default 10:00) | Pending follow-up reminder per servant |
-| Tue, settings (default 18:00) | "غداً اجتماع السيدات" |
-| Wed, settings (default 21:00) | Reminder to servants whose attendance is incomplete |
+| Tuesday at the configured hour (default 18:00), weekly | "غداً اجتماع السيدات" |
+| Wednesday at the configured hour (default 21:00), weekly | Attendance reminder |
+| Daily at the configured hour (default 10:00), if anything is pending | "لديك n افتقاد لم يتم" |
+| 07:00 each day (next 14 days are scheduled) | 📖 آية اليوم |
+| 08:00 on each birthday (next 60 days) | 🎂 Birthday of an assigned woman (father: all women, if enabled) |
+| Evening before and morning of each conference day | Conference reminders |
+| Immediately, while the app is running | New follow-up suggestions created on another phone |
 
-Every notification has a deterministic id, so retries never duplicate. The
-`onNotificationCreated` trigger pushes each notification through FCM,
-respects the user's preferences, and removes invalid tokens.
+Reminders are re-planned on login, whenever the app returns to the
+foreground, and after settings change. Each user can switch every kind off
+in Settings. Birthdays are also written once per year to the in-app
+notification center (Rule G).
 
 ---
 
@@ -184,13 +199,12 @@ attendance, and servant statistics for a date range.
 ## Setup
 
 ### Prerequisites
-Flutter 3.47+, Node 22+, Firebase CLI (`npm i -g firebase-tools`), FlutterFire
+Flutter 3.47+, Firebase CLI (`npm i -g firebase-tools`), FlutterFire
 CLI (`dart pub global activate flutterfire_cli`), and Java 17 for Android.
 
 ```bash
 cd C:\egtma3
 flutter pub get
-cd functions && npm install && cd ..
 ```
 
 ### Firebase (already done for `egtma3-church-app`)
@@ -198,34 +212,25 @@ cd functions && npm install && cd ..
 firebase login
 firebase use egtma3-church-app
 dart pub global run flutterfire_cli:flutterfire configure --project=egtma3-church-app --platforms=android,ios,web
-firebase deploy --only firestore          # rules + indexes
+firebase deploy --only firestore          # rules + indexes (free plan)
 ```
 
-### Manual steps (cannot be automated from the CLI)
-1. **Upgrade to the Blaze plan** (required for Cloud Functions):
-   https://console.firebase.google.com/project/egtma3-church-app/usage/details
-2. **Enable Email/Password sign-in:** Console → Authentication → Sign-in method
-   → Email/Password → Enable.
-3. Deploy functions:
-   ```bash
-   firebase deploy --only functions
-   ```
-   The first deploy asks for `BOOTSTRAP_CODE` and `ALLOW_DEMO_DATA` if
-   `functions/.env` is missing. A `.env` with a random code was generated
-   locally and is git-ignored.
-4. **Create the father account:** open the app → "الإعداد الأول" → enter name,
-   email, password and the `BOOTSTRAP_CODE` from `functions/.env`. This only
-   works while no father exists.
-5. **App Check:** Console → App Check → register Play Integrity (Android) and
-   App Attest (iOS). For debug builds, add the debug token printed in logcat.
-   Turn on enforcement only after verifying.
-6. **iOS push:** upload an APNs auth key (Console → Project settings → Cloud
-   Messaging), enable Push Notifications and Background Modes → Remote
-   notifications in Xcode, then run `flutterfire configure` on a Mac.
-7. **Web push (optional):** generate a VAPID key (Cloud Messaging → Web
-   configuration) and build with `--dart-define=FCM_VAPID_KEY=...`.
-8. **Password-reset email language:** optionally edit the template in
-   Authentication → Templates.
+### Manual steps
+1. **Enable Email/Password sign-in** (free): Console → Authentication →
+   Sign-in method → Email/Password → Enable.
+2. **Create the father account:** open the app → "الإعداد الأول" → name,
+   email, password and the **setup code**. The code is `setupCode()` at the
+   top of `firestore.rules`. This works only once. To change the code, edit
+   it and run `firebase deploy --only firestore:rules`. Keep `firestore.rules`
+   private.
+3. The father adds servants from المستخدمون. Each servant gets an email to
+   set her own password.
+4. **Optional, App Check:** Console → App Check → register Play Integrity
+   (Android) and App Attest (iOS) before enforcing.
+5. **iOS:** run `flutterfire configure` on a Mac. Local notifications need no
+   extra setup.
+
+No Blaze plan, billing account or Cloud Functions are needed.
 
 ---
 
@@ -234,16 +239,15 @@ firebase deploy --only firestore          # rules + indexes
 ```bash
 flutter run                      # device/emulator
 flutter run -d chrome            # web
-cd functions && npm run serve    # local emulators (functions, firestore, auth)
+firebase emulators:start         # local firestore + auth emulators
 ```
 
 ### Demo data
-With `ALLOW_DEMO_DATA=true` in `functions/.env`, go to Settings (father) →
-"إضافة بيانات تجريبية". This adds 18 women, 2 demo servants, 3 streets,
-6 Wednesdays of attendance (which trigger real phone and home-visit
-suggestions), and one conference. Everything is flagged `isDemo`. Remove it
-with "حذف البيانات التجريبية", and set `ALLOW_DEMO_DATA=false` before
-production.
+Go to Settings (father) → "إضافة بيانات تجريبية". This adds 18 women
+assigned to you, 3 streets, 6 Wednesdays of attendance (which create real
+phone and home-visit suggestions), and a conference. Everything is marked
+"(تجريبي)" and `isDemo`. Remove it with "حذف البيانات التجريبية" before real
+use.
 
 ---
 
@@ -253,7 +257,6 @@ production.
 flutter analyze
 flutter test                                 # unit + widget + repository tests
 flutter test integration_test -d <device>    # on-device smoke test
-cd functions && npm test                     # server business-rule tests
 ```
 
 | Suite | Covers |
@@ -264,7 +267,7 @@ cd functions && npm test                     # server business-rule tests
 | `test/unit/filters_permissions_conference_test.dart` | Filters, role permissions and router guard, conference statistics (Rule F) |
 | `test/unit/repositories_test.dart` | Real repositories on in-memory Firestore: CRUD, scoping, no duplicate attendance, conference separation, follow-up history, notification center |
 | `test/widget/widgets_test.dart` | Attendance screen interaction, accessible cards |
-| `functions/src/__tests__` | Server rules A–G, scheduler planning, birthday recipients, Cairo time |
+| `test/unit/on_device_engine_test.dart` | On-device engine: spec scenario end to end, no duplicates across two phones, father notified for home visits; reminder planning (hours, birthdays, conferences, verse, preferences, unique ids) |
 
 ---
 
@@ -274,7 +277,6 @@ cd functions && npm test                     # server business-rule tests
 flutter build apk --release          # Android APK
 flutter build appbundle --release    # Play Store
 flutter build web --release && firebase deploy --only hosting
-firebase deploy --only functions
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
 ```
@@ -283,9 +285,9 @@ Release signing: create `android/key.properties` and a keystore (both
 git-ignored) and reference them in `android/app/build.gradle.kts`.
 
 ## Production checklist
-- [ ] Blaze plan, Email/Password enabled, functions deployed
+- [ ] Email/Password enabled, rules deployed
 - [ ] Father created through the bootstrap screen, then servants added from المستخدمون
-- [ ] `ALLOW_DEMO_DATA=false`, demo data removed
+- [ ] Demo data removed, setup code changed if it was shared
 - [ ] App Check enforced after verification
 - [ ] Release signing configured
 - [ ] Review `settings/app` reminder hours
@@ -293,7 +295,7 @@ git-ignored) and reference them in `android/app/build.gradle.kts`.
 ## Security notes
 - No secrets in the app. `firebase_options.dart` contains public client
   identifiers only.
-- `functions/.env` (bootstrap code) is git-ignored. Never add service-account
-  keys to the repository.
+- The setup code lives only in `firestore.rules` (server side), never in the
+  app. Never add service-account keys to the repository.
 - Logs never include names, phones or addresses. Crashlytics only collects in
   release builds.

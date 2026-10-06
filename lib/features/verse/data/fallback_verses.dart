@@ -1,9 +1,11 @@
 import '../../../core/utils/dates.dart';
 import '../domain/daily_verse.dart';
 
-/// Small offline fallback (Smith–Van Dyke Arabic, public domain).
-/// The primary pool lives in Firestore (`verse_pool`, seeded by functions).
-const _fallback = <(String, String)>[
+/// Bundled verse pool (Smith–Van Dyke Arabic, public domain). This is the
+/// default source of آية اليوم, chosen deterministically per day, so every
+/// phone shows the same verse — even offline. The father can override a day
+/// by writing `daily_verses/{yyyy-MM-dd}` (see [FirestoreVerseSource]).
+const kVersePool = <(String, String)>[
   ('الرَّبُّ رَاعِيَّ فَلاَ يُعْوِزُنِي شَيْءٌ.', 'مزمور 23: 1'),
   ('تَعَالَوْا إِلَيَّ يَا جَمِيعَ الْمُتْعَبِينَ وَالثَّقِيلِي الأَحْمَالِ، وَأَنَا أُرِيحُكُمْ.', 'متى 11: 28'),
   ('أَسْتَطِيعُ كُلَّ شَيْءٍ فِي الْمَسِيحِ الَّذِي يُقَوِّينِي.', 'فيلبي 4: 13'),
@@ -11,11 +13,20 @@ const _fallback = <(String, String)>[
   ('سِرَاجٌ لِرِجْلِي كَلاَمُكَ وَنُورٌ لِسَبِيلِي.', 'مزمور 119: 105'),
   ('اَللهُ لَنَا مَلْجَأٌ وَقُوَّةٌ. عَوْنًا فِي الضِّيقَاتِ وُجِدَ شَدِيدًا.', 'مزمور 46: 1'),
   ('وَنَحْنُ نَعْلَمُ أَنَّ كُلَّ الأَشْيَاءِ تَعْمَلُ مَعًا لِلْخَيْرِ لِلَّذِينَ يُحِبُّونَ اللهَ.', 'رومية 8: 28'),
+  ('اَلْمَحَبَّةُ تَتَأَنَّى وَتَرْفُقُ. اَلْمَحَبَّةُ لاَ تَحْسِدُ.', '1 كورنثوس 13: 4'),
+  ('لاَ تَخَفْ لأَنِّي مَعَكَ. لاَ تَتَلَفَّتْ لأَنِّي إِلهُكَ.', 'إشعياء 41: 10'),
+  ('أَلْقِ عَلَى الرَّبِّ هَمَّكَ فَهُوَ يَعُولُكَ.', 'مزمور 55: 22'),
+  ('سَلاَمًا أَتْرُكُ لَكُمْ. سَلاَمِي أُعْطِيكُمْ.', 'يوحنا 14: 27'),
+  ('اِفْرَحُوا فِي الرَّبِّ كُلَّ حِينٍ، وَأَقُولُ أَيْضًا: افْرَحُوا.', 'فيلبي 4: 4'),
+  ('تَوَكَّلْ عَلَى الرَّبِّ بِكُلِّ قَلْبِكَ، وَعَلَى فَهْمِكَ لاَ تَعْتَمِدْ.', 'أمثال 3: 5'),
+  ('أَنَا هُوَ الطَّرِيقُ وَالْحَقُّ وَالْحَيَاةُ.', 'يوحنا 14: 6'),
 ];
 
 DailyVerse fallbackVerseFor(DateTime day) {
-  final idx = Dates.dateOnly(day).difference(DateTime(2024)).inDays.abs() %
-      _fallback.length;
-  final (text, ref) = _fallback[idx];
+  final d = Dates.dateOnly(day);
+  final days = DateTime.utc(d.year, d.month, d.day)
+      .difference(DateTime.utc(2024))
+      .inDays;
+  final (text, ref) = kVersePool[days % kVersePool.length];
   return DailyVerse(date: Dates.dayId(day), text: text, reference: ref);
 }

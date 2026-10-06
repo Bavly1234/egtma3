@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../utils/app_logger.dart';
@@ -16,9 +15,6 @@ class AppFailure implements Exception {
     if (error is AppFailure) return error;
     AppLog.e('Operation failed', error, st);
     if (error is FirebaseAuthException) return AppFailure(_auth(error.code));
-    if (error is FirebaseFunctionsException) {
-      return AppFailure(_code(error.code, serverMessage: error.message));
-    }
     if (error is FirebaseException) return AppFailure(_code(error.code));
     if (error is FormatException) {
       return const AppFailure('البيانات غير صحيحة.');
@@ -41,19 +37,17 @@ class AppFailure implements Exception {
         _ => 'تعذر تسجيل الدخول. حاولي مرة أخرى.',
       };
 
-  /// Server messages from our own callables are already Arabic and user-safe
-  /// for invalid-argument / failed-precondition / already-exists.
-  static String _code(String code, {String? serverMessage}) => switch (code) {
+  static String _code(String code) => switch (code) {
         'permission-denied' => 'ليس لديك صلاحية لهذا الإجراء.',
         'unavailable' ||
         'deadline-exceeded' =>
           'تعذر الاتصال بالخادم. تأكدي من الإنترنت وحاولي مرة أخرى.',
         'not-found' => 'البيانات المطلوبة غير موجودة.',
-        'already-exists' => serverMessage ?? 'هذا السجل موجود بالفعل.',
+        'already-exists' => 'هذا السجل موجود بالفعل.',
         'unauthenticated' => 'يجب تسجيل الدخول أولاً.',
         'invalid-argument' ||
         'failed-precondition' =>
-          serverMessage ?? 'البيانات المدخلة غير صحيحة.',
+          'البيانات المدخلة غير صحيحة.',
         _ => 'حدث خطأ. حاولي مرة أخرى.',
       };
 }

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/services/messaging_service.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../audit/data/audit_repository.dart';
 import '../../audit/domain/audit_entry.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
-import '../../users/data/users_repository.dart';
+import '../../notifications/data/reminder_service.dart';
+import '../data/demo_seeder.dart';
 import '../data/settings_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -22,8 +22,13 @@ class SettingsScreen extends ConsumerWidget {
     Widget pref(String key, String title, bool value) => SwitchListTile(
           title: Text(title),
           value: value,
-          onChanged: (v) => runGuarded(
-              context, () => auth.updatePrefs(user.id, user.prefs.copyWith(key, v))),
+          onChanged: (v) => runGuarded(context, () async {
+            await auth.updatePrefs(user.id, user.prefs.copyWith(key, v));
+            final updated = ref.read(currentUserProvider).value;
+            if (updated != null) {
+              await ref.read(reminderServiceProvider).refresh(updated);
+            }
+          }),
         );
 
     return Scaffold(
@@ -64,7 +69,7 @@ class SettingsScreen extends ConsumerWidget {
             final ok = await confirmAction(context,
                 title: 'تسجيل الخروج', message: 'هل تريدين تسجيل الخروج؟');
             if (!ok) return;
-            await ref.read(messagingServiceProvider).unregister(user.id);
+            await ref.read(reminderServiceProvider).stop();
             await auth.signOut();
           },
           icon: const Icon(Icons.logout),
@@ -88,6 +93,7 @@ class _ChurchSettings extends ConsumerWidget {
 
     Future<void> save(AppSettings n) => runGuarded(context, () async {
           await repo.save(n);
+          await ref.read(reminderServiceProvider).refresh(user);
           audit.log(
               actor: user,
               action: AuditAction.settingsChanged,
@@ -141,13 +147,13 @@ class _ChurchSettings extends ConsumerWidget {
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const Text(
-                'للتجربة فقط. تعمل فقط إذا كان الخادم مُعداً بـ ALLOW_DEMO_DATA=true. '
-                'كل البيانات التجريبية مُعلّمة ويمكن حذفها بالكامل.',
+                'للتجربة فقط. كل البيانات التجريبية مُعلّمة (تجريبي) '
+                'ويمكن حذفها بالكامل قبل الاستخدام الفعلي.',
                 style: TextStyle(fontSize: 16)),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => runGuarded(context, () async {
-                final r = await ref.read(usersRepositoryProvider).seedDemo();
+                final r = await ref.read(demoSeederProvider).seed(user);
                 if (context.mounted) AppToast.success(context, r);
               }),
               icon: const Icon(Icons.science),
@@ -163,7 +169,7 @@ class _ChurchSettings extends ConsumerWidget {
                     confirmLabel: 'حذف');
                 if (!ok || !context.mounted) return;
                 await runGuarded(context, () async {
-                  final r = await ref.read(usersRepositoryProvider).removeDemo();
+                  final r = await ref.read(demoSeederProvider).remove();
                   if (context.mounted) AppToast.success(context, r);
                 });
               },

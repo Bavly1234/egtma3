@@ -102,6 +102,8 @@ class ExcelImportService {
         for (final row in rows.skip(i).take(200)) {
           final d = row.draft!;
           final streetId = _streets.upsertInBatch(batch, d.streetName);
+          batch.set(_db.collection(FsPaths.streets).doc(streetId),
+              {'womenCount': FieldValue.increment(1)}, SetOptions(merge: true));
           batch.set(_db.collection(FsPaths.women).doc(), {
             ...d.toFields(streetId),
             'assignedServantId': assignTo?.id,
