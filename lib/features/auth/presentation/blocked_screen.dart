@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../core/routing/routes.dart';
 import '../../../core/widgets/states.dart';
 import '../data/auth_repository.dart';
 
@@ -22,11 +20,6 @@ class BlockedScreen extends ConsumerWidget {
               onPressed: () => ref.read(authRepositoryProvider).signOut(),
               icon: const Icon(Icons.logout),
               label: const Text('تسجيل الخروج'),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => context.go(Routes.setup),
-              child: const Text('الإعداد الأول (للأب الكاهن)'),
             ),
           ]),
         ),

@@ -9,7 +9,6 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/domain/app_user.dart';
 import '../../features/auth/presentation/blocked_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
-import '../../features/auth/presentation/setup_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/birthdays/presentation/birthdays_screen.dart';
 import '../../features/conferences/presentation/conference_attendance_screen.dart';
@@ -53,16 +52,14 @@ String? authRedirect({
   required bool profileLoading,
   required AppUser? user,
 }) {
-  final public = location == Routes.login || location == Routes.setup;
+  final public = location == Routes.login;
   if (authLoading || (signedIn && profileLoading)) {
     return location == Routes.splash ? null : Routes.splash;
   }
   if (!signedIn) return public ? null : Routes.login;
   if (user == null || !user.active) {
-    // Signed in but no active profile: allow first-time setup.
-    return location == Routes.blocked || location == Routes.setup
-        ? null
-        : Routes.blocked;
+    // Signed in but no profile (e.g. wrong join code) or disabled.
+    return location == Routes.blocked ? null : Routes.blocked;
   }
   if (public || location == Routes.splash || location == Routes.blocked) {
     return Routes.home;
@@ -95,7 +92,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       r(Routes.splash, (_) => const SplashScreen()),
       r(Routes.login, (_) => const LoginScreen()),
-      r(Routes.setup, (_) => const SetupScreen()),
       r(Routes.blocked, (_) => const BlockedScreen()),
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => HomeShell(shell: shell),

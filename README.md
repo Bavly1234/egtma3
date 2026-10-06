@@ -53,7 +53,7 @@ contain no business logic: the rules live in `domain/` and are unit-tested.
 | Meeting dashboard counters | Incremented in the same batch as each attendance mark |
 | Call/visit counters on a woman | Written in the same batch as the follow-up record |
 | Street counts, reassignment, cancelling on deactivate | `WomenRepository` |
-| Creating servant accounts | Father's phone, through a *secondary* Firebase app so he stays signed in |
+| Creating accounts | Self sign-up in the app with the join code, checked by Firestore rules |
 | Reminders (Tuesday, Wednesday, birthdays, conference, verse, pending follow-ups) | Scheduled on each phone with `flutter_local_notifications`; they fire even when the app is closed |
 | A new follow-up created on another phone | Saved to the notification center; the phone shows it immediately if the app is running, otherwise as a summary on next open |
 
@@ -80,7 +80,6 @@ contain no business logic: the rules live in `domain/` and are unit-tested.
 | `notifications/{dedupeId}` | recipientId, title, message, type, relatedEntityId/Type, createdAt, readAt |
 | `daily_verses/{yyyy-MM-dd}` | Optional per-day override of the bundled verse pool |
 | `settings/app` | reminder hours, birthday and verse toggles, `fatherIds` |
-| `settings/bootstrap` | One-time record of the first father setup |
 | `audit_logs/{id}` | append-only: action, actor, entity, summary, createdAt |
 
 **Design decisions**
@@ -218,13 +217,13 @@ firebase deploy --only firestore          # rules + indexes (free plan)
 ### Manual steps
 1. **Enable Email/Password sign-in** (free): Console → Authentication →
    Sign-in method → Email/Password → Enable.
-2. **Create the father account:** open the app → "الإعداد الأول" → name,
-   email, password and the **setup code**. The code is `setupCode()` at the
-   top of `firestore.rules`. This works only once. To change the code, edit
-   it and run `firebase deploy --only firestore:rules`. Keep `firestore.rules`
-   private.
-3. The father adds servants from المستخدمون. Each servant gets an email to
-   set her own password.
+2. **Accounts (same as eftekad_app):** anyone opens the app → "حساب جديد" →
+   name, email, password, chooses **خادمة** or **الأب الكاهن**, and enters the
+   **join code** (`897373`). Firestore rules check the code; with a wrong code
+   the new account is deleted again. To change the code, edit `joinCode()` at
+   the top of `firestore.rules` and run `firebase deploy --only firestore:rules`.
+3. The father can later disable an account, change its role, or send a
+   password-reset email from المستخدمون.
 4. **Optional, App Check:** Console → App Check → register Play Integrity
    (Android) and App Attest (iOS) before enforcing.
 5. **iOS:** run `flutterfire configure` on a Mac. Local notifications need no
@@ -286,8 +285,8 @@ git-ignored) and reference them in `android/app/build.gradle.kts`.
 
 ## Production checklist
 - [ ] Email/Password enabled, rules deployed
-- [ ] Father created through the bootstrap screen, then servants added from المستخدمون
-- [ ] Demo data removed, setup code changed if it was shared
+- [ ] Father and servants registered with the join code
+- [ ] Demo data removed, join code changed if it leaked
 - [ ] App Check enforced after verification
 - [ ] Release signing configured
 - [ ] Review `settings/app` reminder hours
@@ -295,7 +294,7 @@ git-ignored) and reference them in `android/app/build.gradle.kts`.
 ## Security notes
 - No secrets in the app. `firebase_options.dart` contains public client
   identifiers only.
-- The setup code lives only in `firestore.rules` (server side), never in the
+- The join code lives only in `firestore.rules` (server side), never in the
   app. Never add service-account keys to the repository.
 - Logs never include names, phones or addresses. Crashlytics only collects in
   release builds.

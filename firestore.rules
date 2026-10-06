@@ -10,13 +10,15 @@ rules_version = '2';
 //  * history (follow_ups, audit_logs) is append-only;
 //  * notifications can be created once but never overwritten (de-duplication).
 //
-// SETUP CODE: the first father account can be created only with the code in
-// `setupCode()` below, and only once. Keep this file private (do not publish
-// it); change the code before deploying if it was ever shared.
+// JOIN CODE (كود الانضمام): anyone can create an account from the app, but
+// the profile is accepted only with the code in `joinCode()` below — the same
+// approach as eftekad_app. The code lives only here (server side), not in the
+// app. To change it: edit joinCode() and run
+//   firebase deploy --only firestore:rules
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function setupCode() { return '-LyLiukky2KRoxGr'; }
+    function joinCode() { return '897373'; }
 
     // ---------- helpers ----------
     function signedIn() { return request.auth != null; }
@@ -35,23 +37,15 @@ service cloud.firestore {
     function onlyChanges(keys) { return changes().hasOnly(keys); }
     function isStatus(s) { return s == 'present' || s == 'absent'; }
     function str(v, max) { return v is string && v.size() <= max; }
-    function bootstrapPath() { return /databases/$(database)/documents/settings/bootstrap; }
-    function isBootstrapping() {
-      return signedIn() && !exists(bootstrapPath()) && existsAfter(bootstrapPath())
-        && getAfter(bootstrapPath()).data.fatherId == request.auth.uid
-        && getAfter(bootstrapPath()).data.code == setupCode();
-    }
-
     // ---------- users ----------
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isFather();
-      allow create: if (isFather()
-          && request.resource.data.role == 'servant'
-          && request.resource.data.active == true
-          && str(request.resource.data.name, 120))
-        || (request.auth.uid == uid && isBootstrapping()
-          && request.resource.data.role == 'father'
-          && request.resource.data.active == true);
+      // Self sign-up: only your own profile, only with the right join code.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.code == joinCode()
+        && request.resource.data.role in ['servant', 'father']
+        && request.resource.data.active == true
+        && str(request.resource.data.name, 120) && request.resource.data.name.size() >= 3;
       // Users may edit their own preferences; the father edits others
       // (including role/active) but never his own role/active.
       allow update: if (signedIn() && request.auth.uid == uid
@@ -179,15 +173,9 @@ service cloud.firestore {
     match /verse_pool/{id} {
       allow read, write: if isFather();
     }
-    match /settings/bootstrap {
-      allow read: if false;
-      allow create: if signedIn() && request.resource.data.fatherId == request.auth.uid
-        && request.resource.data.code == setupCode();
-      allow update, delete: if false;
-    }
     match /settings/app {
       allow read: if isActive();
-      allow write: if isFather() || isBootstrapping();
+      allow write: if isFather();
     }
 
     // ---------- audit log: append-only ----------

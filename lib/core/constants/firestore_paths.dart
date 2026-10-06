@@ -15,6 +15,5 @@ abstract final class FsPaths {
   static const versePool = 'verse_pool';
   static const settings = 'settings';
   static const settingsAppDoc = 'app';
-  static const settingsBootstrapDoc = 'bootstrap';
   static const auditLogs = 'audit_logs';
 }

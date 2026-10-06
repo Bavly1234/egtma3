@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
+import '../../../core/constants/enums.dart';
 import '../domain/app_user.dart';
 
 class AuthRepository {
@@ -26,6 +27,51 @@ class AuthRepository {
           email: email.trim(), password: password);
     } catch (e, st) {
       throw AppFailure.from(e, st);
+    }
+  }
+
+  /// Self sign-up with the join code (same approach as eftekad_app).
+  /// The code is checked by Firestore security rules — it is not stored in
+  /// the app. If the rules reject the profile (wrong code), the new Auth
+  /// account is deleted again.
+  Future<void> signUp({
+    required String name,
+    required String email,
+    required String password,
+    required UserRole role,
+    required String code,
+  }) async {
+    final UserCredential cred;
+    try {
+      cred = await _auth.createUserWithEmailAndPassword(
+          email: email.trim(), password: password);
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+    final uid = cred.user!.uid;
+    try {
+      await _db.collection(FsPaths.users).doc(uid).set({
+        'name': name.trim(),
+        'email': email.trim().toLowerCase(),
+        'phone': '',
+        'role': role.wire,
+        'active': true,
+        'code': code.trim(),
+        'notificationPrefs': const NotificationPrefs().toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      await cred.user!.delete().catchError((Object _) {});
+      throw const AppFailure('كود الانضمام غلط');
+    }
+    if (role == UserRole.father) {
+      // Lets servants' phones notify the father(s) about home visits.
+      await _db
+          .collection(FsPaths.settings)
+          .doc(FsPaths.settingsAppDoc)
+          .set({'fatherIds': FieldValue.arrayUnion([uid])}, SetOptions(merge: true))
+          .catchError((Object _) {});
     }
   }
 

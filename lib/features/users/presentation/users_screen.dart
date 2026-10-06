@@ -15,79 +15,11 @@ import '../data/users_repository.dart';
 class UsersScreen extends ConsumerWidget {
   const UsersScreen({super.key});
 
-  Future<void> _add(BuildContext context, WidgetRef ref) async {
-    final name = TextEditingController();
-    final email = TextEditingController();
-    final phone = TextEditingController();
-    final key = GlobalKey<FormState>();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة خادمة'),
-        content: Form(
-          key: key,
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextFormField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'الاسم'),
-                validator: (v) => (v?.trim().length ?? 0) < 3 ? 'الاسم مطلوب' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: email,
-                textDirection: TextDirection.ltr,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'البريد الإلكتروني'),
-                validator: (v) => (v == null || !v.contains('@')) ? 'البريد غير صحيح' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: phone,
-                textDirection: TextDirection.ltr,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'التليفون'),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                  'سيصلها بريد إلكتروني لاختيار كلمة المرور الخاصة بها.',
-                  style: TextStyle(fontSize: 15)),
-            ]),
-          ),
-        ),
-        actions: [
-          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(
-            onPressed: () {
-              if (key.currentState!.validate()) Navigator.pop(ctx, true);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !context.mounted) return;
-    await runGuarded(
-      context,
-      () => ref.read(usersRepositoryProvider).createServant(
-          name: name.text,
-          email: email.text,
-          phone: phone.text,
-          actor: ref.read(requireUserProvider)),
-      successMessage: 'تمت إضافة الخادمة وإرسال رابط كلمة المرور',
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(requireUserProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('المستخدمون')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _add(context, ref),
-        icon: const Icon(Icons.person_add),
-        label: const Text('إضافة خادمة', style: TextStyle(fontSize: 18)),
-      ),
       body: AsyncBody(
         value: ref.watch(allUsersProvider),
         builder: (users) => ListView(
@@ -98,6 +30,11 @@ class UsersScreen extends ConsumerWidget {
               icon: const Icon(Icons.assignment_ind),
               label: const Text('تعيين السيدات وتوزيع العمل'),
             ),
+            const SizedBox(height: 12),
+            const Text(
+                'الخادمات ينشئن حساباتهن بأنفسهن من شاشة الدخول باستخدام كود الانضمام. '
+                'يمكنك هنا إيقاف أي حساب أو تغيير صلاحيته.',
+                style: TextStyle(fontSize: 16)),
             const SizedBox(height: 12),
             for (final u in users) _UserCard(user: u, isMe: u.id == me.id, me: me),
           ],
