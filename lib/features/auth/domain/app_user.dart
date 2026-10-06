@@ -54,6 +54,7 @@ class AppUser {
     required this.role,
     required this.active,
     this.prefs = const NotificationPrefs(),
+    this.textScale = 1.0,
     this.createdAt,
     this.updatedAt,
   });
@@ -65,6 +66,9 @@ class AppUser {
   final UserRole role;
   final bool active;
   final NotificationPrefs prefs;
+
+  /// Personal font-size multiplier (accessibility setting).
+  final double textScale;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -80,6 +84,7 @@ class AppUser {
         active: (m['active'] as bool?) ?? false,
         prefs: NotificationPrefs.fromMap(
             (m['notificationPrefs'] as Map?)?.cast<String, dynamic>()),
+        textScale: ((m['textScale'] as num?) ?? 1.0).toDouble(),
         createdAt: tsToDate(m['createdAt']),
         updatedAt: tsToDate(m['updatedAt']),
       );

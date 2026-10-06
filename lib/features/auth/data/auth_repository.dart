@@ -40,6 +40,17 @@ class AuthRepository {
 
   Future<void> signOut() => _auth.signOut();
 
+  Future<void> updateTextScale(String uid, double scale) async {
+    try {
+      await _db.collection(FsPaths.users).doc(uid).update({
+        'textScale': scale,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
+
   Future<void> updatePrefs(String uid, NotificationPrefs prefs) async {
     try {
       await _db.collection(FsPaths.users).doc(uid).update({

@@ -144,11 +144,11 @@ class StatsFilter {
 
   @override
   bool operator ==(Object other) =>
-      o is StatsFilter &&
-      o.range == range &&
-      o.servantId == servantId &&
-      o.streetId == streetId &&
-      o.followUpType == followUpType;
+      other is StatsFilter &&
+      other.range == range &&
+      other.servantId == servantId &&
+      other.streetId == streetId &&
+      other.followUpType == followUpType;
   @override
   int get hashCode => Object.hash(range, servantId, streetId, followUpType);
 }
