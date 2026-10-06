@@ -99,19 +99,29 @@ contain no business logic: the rules live in `domain/` and are unit-tested.
 
 | | خادمة (servant) | الأب الكاهن (father) |
 |---|---|---|
-| Her assigned women: view, attendance, calls/visits/notes | ✅ | ✅ all women |
-| Edit woman notes | ✅ assigned only | ✅ |
+| See all women, attendance, follow-ups, conferences | ✅ | ✅ |
+| Take attendance, record calls/visits/notes, complete follow-ups | ✅ all women | ✅ |
+| Edit woman notes | ✅ | ✅ |
 | Add / edit / delete / deactivate women | ❌ | ✅ |
-| Assign servants, streets, conferences, users | ❌ | ✅ |
-| Statistics | her own | everything |
+| Assign women to servants, streets, conferences, users | ❌ | ✅ |
+| Statistics | her own + church overview | everything |
 | Excel import/export, audit log, settings | ❌ | ✅ |
 | Dismiss a suggestion | ❌ | ✅ |
 
+**Assignment is optional.** A woman can be assigned to a servant, but every
+servant still sees and works on every woman. The assignment shows on each
+card ("الخادمة: …", plus "✓ معيّنة لكِ" on your own). The women list has an
+"المعيّنات لي فقط" chip, and the women, attendance and follow-up screens can
+filter by servant. Servants get birthday reminders for the women assigned to
+them, and new follow-ups notify the assigned servant (or the father, if the
+woman is unassigned).
+
 Permissions are enforced in three places: the UI (`Permissions`), the router
 guard (`Routes.isFatherOnly`), and, authoritatively, `firestore.rules`.
-- Servants can only read or write women assigned to them.
-- Servants can only change those women's notes and summary fields; they can't
-  rename or reassign them.
+- Any active servant can read everything and record attendance and follow-ups
+  for any woman.
+- Servants can only change a woman's notes and summary fields; they can't
+  rename, delete or reassign her.
 - Servants can't dismiss suggestions or change any role.
 - Follow-up history and audit logs are append-only.
 - Disabling a servant sets `active: false`. The rules then deny her every

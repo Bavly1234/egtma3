@@ -54,9 +54,7 @@ class FollowUpRepository {
   Stream<List<FollowUpSuggestion>> watchSuggestions(
       AppUser user, SuggestionQuery q) {
     Query<Map<String, dynamic>> query = _suggestions;
-    if (!user.isFather) {
-      query = query.where('assignedServantId', isEqualTo: user.id);
-    } else if (q.servantId != null) {
+    if (q.servantId != null) {
       query = query.where('assignedServantId', isEqualTo: q.servantId);
     }
     if (q.type != null) query = query.where('type', isEqualTo: q.type!.wire);
@@ -77,7 +75,6 @@ class FollowUpRepository {
 
   Stream<List<FollowUpSuggestion>> watchForWoman(String womanId, AppUser user) {
     var q = _suggestions.where('womanId', isEqualTo: womanId);
-    if (!user.isFather) q = q.where('assignedServantId', isEqualTo: user.id);
     return q.orderBy('createdAt', descending: true).limit(20).snapshots().map(
         (s) => s.docs
             .map((d) => FollowUpSuggestion.fromMap(d.id, d.data()))
@@ -177,9 +174,6 @@ class FollowUpRepository {
 
   Stream<List<FollowUp>> watchHistory(String womanId, AppUser user) {
     var q = _followUps.where('womanId', isEqualTo: womanId);
-    if (!user.isFather) {
-      q = q.where('assignedServantId', isEqualTo: user.id);
-    }
     return q.orderBy('occurredAt', descending: true).limit(100).snapshots().map(
         (s) => s.docs.map((d) => FollowUp.fromMap(d.id, d.data())).toList());
   }
@@ -194,9 +188,7 @@ class FollowUpRepository {
   }) async {
     try {
       Query<Map<String, dynamic>> q = _followUps;
-      if (!user.isFather) {
-        q = q.where('servantId', isEqualTo: user.id);
-      } else if (servantId != null) {
+      if (servantId != null) {
         q = q.where('servantId', isEqualTo: servantId);
       }
       if (type != null) q = q.where('type', isEqualTo: type.wire);

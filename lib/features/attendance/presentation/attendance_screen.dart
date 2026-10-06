@@ -10,7 +10,6 @@ import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/states.dart';
-import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../../women/domain/woman.dart';
@@ -82,10 +81,8 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final date = ref.watch(meetingDateProvider);
     final filter = ref.watch(attendanceFilterProvider);
-    final user = ref.watch(requireUserProvider);
     final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants =
-        user.isFather ? ref.watch(activeServantsProvider).value ?? const [] : const [];
+    final servants = ref.watch(activeServantsProvider).value ?? const [];
     final notifier = ref.read(attendanceFilterProvider.notifier);
 
     return Material(
@@ -127,7 +124,7 @@ class _Header extends ConsumerWidget {
                     notifier.set(filter.copyWith(streetId: () => v)),
               ),
             ),
-            if (user.isFather) ...[
+            ...[
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String?>(

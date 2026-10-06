@@ -10,20 +10,21 @@ class WomanTile extends StatelessWidget {
     required this.woman,
     this.onTap,
     this.trailing,
-    this.showServant = true,
+    this.highlightServantId,
   });
   final Woman woman;
   final VoidCallback? onTap;
   final Widget? trailing;
-  final bool showServant;
+
+  /// When the woman is assigned to this servant, a "معيّنة لكِ" badge shows.
+  final String? highlightServantId;
 
   @override
   Widget build(BuildContext context) {
     final w = woman;
     final sub = [
       if (w.streetName.isNotEmpty) w.streetName,
-      if (showServant && w.assignedServantName != null)
-        'الخادمة: ${w.assignedServantName}',
+      'الخادمة: ${w.assignedServantName ?? 'غير معيّنة'}',
     ].join('  •  ');
     return Card(
       child: InkWell(
@@ -58,6 +59,10 @@ class WomanTile extends StatelessWidget {
                             fontSize: 16, color: AppColors.textMuted)),
                   const SizedBox(height: 4),
                   Wrap(spacing: 6, runSpacing: 4, children: [
+                    if (highlightServantId != null &&
+                        w.assignedServantId == highlightServantId)
+                      const _Badge('✓ معيّنة لكِ', AppColors.primary,
+                          AppColors.primaryLight),
                     if (!w.active)
                       const _Badge('غير نشطة', Colors.black54, Color(0xFFEEEEEE)),
                     if (w.consecutiveAbsences >= 2)

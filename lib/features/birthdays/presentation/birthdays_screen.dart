@@ -44,7 +44,6 @@ class BirthdaysScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(requireUserProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('أعياد الميلاد')),
       body: AsyncBody(
@@ -57,12 +56,12 @@ class BirthdaysScreen extends ConsumerWidget {
             if (today.isEmpty)
               const Text('لا توجد أعياد ميلاد اليوم', style: TextStyle(fontSize: 18))
             else
-              for (final w in today) _BirthdayCard(w: w, showServant: user.isFather, today: true),
+              for (final w in today) _BirthdayCard(w: w, showServant: true, today: true),
             const SectionTitle('أعياد الميلاد القادمة (30 يوم)'),
             if (upcoming.isEmpty)
               const Text('لا يوجد', style: TextStyle(fontSize: 18))
             else
-              for (final w in upcoming) _BirthdayCard(w: w, showServant: user.isFather),
+              for (final w in upcoming) _BirthdayCard(w: w, showServant: true),
           ]);
         },
       ),

@@ -29,9 +29,8 @@ class AbsenceProcessor {
   /// Never throws: failures are logged and retried on the next mark.
   Future<void> process(Woman woman, AppUser actor) async {
     try {
-      // 1. History (servants can only read records of their own women).
+      // 1. History.
       var hq = _db.collection(FsPaths.attendance).where('womanId', isEqualTo: woman.id);
-      if (!actor.isFather) hq = hq.where('servantId', isEqualTo: actor.id);
       final history = await hq.orderBy('meetingId', descending: true).limit(500).get();
       final marks = <AttendanceMark>[];
       var present = 0, absent = 0;
@@ -45,7 +44,6 @@ class AbsenceProcessor {
 
       // 2. Existing suggestions.
       var sq = _db.collection(FsPaths.suggestions).where('womanId', isEqualTo: woman.id);
-      if (!actor.isFather) sq = sq.where('assignedServantId', isEqualTo: actor.id);
       final existingDocs = (await sq.get()).docs;
       final existing = [
         for (final d in existingDocs)
@@ -131,7 +129,6 @@ class AbsenceProcessor {
           .collection(FsPaths.suggestions)
           .where('womanId', isEqualTo: womanId)
           .where('status', whereIn: SuggestionStatus.activeWires);
-      if (!actor.isFather) q = q.where('assignedServantId', isEqualTo: actor.id);
       final types = {
         for (final d in (await q.get()).docs)
           ?SuggestionType.fromWire(d.get('type') as String?),

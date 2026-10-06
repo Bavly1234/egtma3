@@ -7,7 +7,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
-import '../../auth/data/auth_repository.dart';
 import '../data/attendance_repository.dart';
 import '../domain/attendance_record.dart';
 import 'attendance_controller.dart';
@@ -21,7 +20,6 @@ class AttendanceHistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(requireUserProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('سجل الاجتماعات')),
       body: AsyncBody(
@@ -35,9 +33,8 @@ class AttendanceHistoryScreen extends ConsumerWidget {
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) {
                   final m = items[i];
-                  final mine = user.isFather ? null : m.byServant[user.id];
-                  final present = mine?.present ?? m.present;
-                  final absent = mine?.absent ?? m.absent;
+                  final present = m.present;
+                  final absent = m.absent;
                   final total = present + absent;
                   final rate = total == 0 ? 0.0 : present / total;
                   final date = Dates.parseDayId(m.meetingId);

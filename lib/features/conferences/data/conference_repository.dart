@@ -97,7 +97,6 @@ class ConferenceRepository {
     var q = _att
         .where('conferenceId', isEqualTo: conferenceId)
         .where('conferenceDayId', isEqualTo: dayId);
-    if (!user.isFather) q = q.where('servantId', isEqualTo: user.id);
     return q.snapshots().map((s) => {
           for (final d in s.docs)
             if (ConferenceAttendance.fromMap(d.data()) case final r?)
@@ -121,8 +120,7 @@ class ConferenceRepository {
       String conferenceId, AppUser user) async {
     try {
       var q = _att.where('conferenceId', isEqualTo: conferenceId);
-      if (!user.isFather) q = q.where('servantId', isEqualTo: user.id);
-      final snap = await q.get();
+        final snap = await q.get();
       return snap.docs
           .map((d) => ConferenceAttendance.fromMap(d.data()))
           .whereType<ConferenceAttendance>()

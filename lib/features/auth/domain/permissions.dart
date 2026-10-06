@@ -12,9 +12,8 @@ abstract final class Permissions {
   static bool canViewAllStatistics(AppUser u) => u.active && u.isFather;
   static bool canManageStreets(AppUser u) => u.active && u.isFather;
 
-  /// Servants may only act on women assigned to them.
-  static bool canActOnWoman(AppUser u, String? assignedServantId) =>
-      u.active && (u.isFather || assignedServantId == u.id);
+  /// Every active servant may act on every woman (assignment is optional).
+  static bool canActOnWoman(AppUser u, String? assignedServantId) => u.active;
 
   static bool canTakeAttendance(AppUser u) => u.active;
   static bool canEditWomanNotes(AppUser u, String? assignedServantId) =>

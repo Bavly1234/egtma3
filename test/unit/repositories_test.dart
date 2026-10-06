@@ -57,10 +57,12 @@ void main() {
     expect((await db.collection(FsPaths.auditLogs).get()).size, 3);
   });
 
-  test('servant query is scoped to assigned women; filters apply', () async {
+  test('servants see all women; "mine" filter uses the optional assignment', () async {
     await addWoman('مريم أحمد', servantId: 's1');
     await addWoman('سعاد جرجس', servantId: 's2', street: 'شارع النصر');
-    final mine = await women.page(servant, WomenFilter.empty);
+    final all = await women.page(servant, WomenFilter.empty);
+    expect(all.items.length, 2);
+    final mine = await women.page(servant, const WomenFilter(servantId: 's1'));
     expect(mine.items.map((w) => w.fullName), ['مريم أحمد']);
     final byStreet = await women.page(father, WomenFilter(streetId: mine.items.first.streetId));
     expect(byStreet.items.length, 1);
@@ -72,7 +74,7 @@ void main() {
     final a = await addWoman('أ ب ج');
     final b = await addWoman('د هـ و');
     await women.assign([a.id, b.id], servant, father);
-    final mine = await women.page(servant, WomenFilter.empty);
+    final mine = await women.page(servant, const WomenFilter(servantId: 's1'));
     expect(mine.items.length, 2);
   });
 

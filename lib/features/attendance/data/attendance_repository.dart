@@ -19,12 +19,10 @@ class AttendanceRepository {
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection(FsPaths.attendance);
 
-  /// Live statuses for one meeting, keyed by womanId. Servants only see the
-  /// records of their own assigned women.
+  /// Live statuses for one meeting, keyed by womanId.
   Stream<Map<String, AttendanceStatus>> watchMeeting(
       String meetingId, AppUser user) {
     var q = _col.where('meetingId', isEqualTo: meetingId);
-    if (!user.isFather) q = q.where('servantId', isEqualTo: user.id);
     return q.snapshots(includeMetadataChanges: true).map((s) {
       final out = <String, AttendanceStatus>{};
       for (final d in s.docs) {
@@ -135,8 +133,7 @@ class AttendanceRepository {
       {int limit = 52}) async {
     try {
       var q = _col.where('womanId', isEqualTo: womanId);
-      if (!user.isFather) q = q.where('servantId', isEqualTo: user.id);
-      final snap =
+        final snap =
           await q.orderBy('meetingId', descending: true).limit(limit).get();
       return snap.docs
           .map((d) => AttendanceRecord.fromMap(d.data()))
@@ -186,8 +183,7 @@ class AttendanceRepository {
       var q = _col
           .where('meetingId', isGreaterThanOrEqualTo: fromId)
           .where('meetingId', isLessThanOrEqualTo: toId);
-      if (!user.isFather) q = q.where('servantId', isEqualTo: user.id);
-      final snap = await q.get();
+        final snap = await q.get();
       return snap.docs
           .map((d) => AttendanceRecord.fromMap(d.data()))
           .whereType<AttendanceRecord>()

@@ -59,7 +59,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(user.isFather ? 'السيدات' : 'السيدات المسؤولة عنهن'),
+        title: const Text('السيدات'),
         actions: [
           if (Permissions.canImportExport(user))
             IconButton(
@@ -111,6 +111,19 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
               ),
             ),
           ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FilterChip(
+              avatar: const Icon(Icons.badge, size: 20),
+              label: const Text('المعيّنات لي فقط'),
+              selected: filter.servantId == user.id,
+              onSelected: (on) => ref.read(womenFilterProvider.notifier).set(
+                  filter.copyWith(servantId: () => on ? user.id : null)),
+            ),
+          ),
         ),
         if (!filter.isEmpty)
           Align(
@@ -170,7 +183,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
                     final w = s.items[i];
                     return WomanTile(
                       woman: w,
-                      showServant: user.isFather,
+                      highlightServantId: user.id,
                       onTap: () => context.push(Routes.woman(w.id)),
                     );
                   },

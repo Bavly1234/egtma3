@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/states.dart';
-import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../data/follow_up_repository.dart';
@@ -24,7 +23,6 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(requireUserProvider);
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -56,7 +54,7 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
                 selected: !_activeOnly,
                 onSelected: (_) => setState(() => _activeOnly = false),
               ),
-              if (user.isFather) _servantFilter(),
+              _servantFilter(),
               _streetFilter(),
             ]),
           ),

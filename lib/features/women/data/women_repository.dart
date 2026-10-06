@@ -31,15 +31,13 @@ class WomenRepository {
   CollectionReference<Map<String, dynamic>> get col =>
       _db.collection(FsPaths.women);
 
-  /// Servants can only ever query their own assigned women (also enforced by
-  /// security rules, which reject any unscoped servant query).
-  Query<Map<String, dynamic>> scoped(AppUser user) => user.isFather
-      ? col
-      : col.where('assignedServantId', isEqualTo: user.id);
+  /// All active staff see all women. Assignment to a servant is optional and
+  /// only used as a filter / label.
+  Query<Map<String, dynamic>> scoped(AppUser user) => col;
 
   Query<Map<String, dynamic>> buildQuery(AppUser user, WomenFilter f) {
     var q = scoped(user);
-    if (user.isFather && f.servantId != null) {
+    if (f.servantId != null) {
       q = q.where('assignedServantId', isEqualTo: f.servantId);
     }
     if (f.streetId != null) q = q.where('streetId', isEqualTo: f.streetId);
@@ -352,12 +350,16 @@ class WomenRepository {
   }
 
   /// Women whose birthday falls in [month] (optionally on [day]).
-  Future<List<Woman>> birthdays(AppUser user, int month, {int? day}) async {
+  Future<List<Woman>> birthdays(AppUser user, int month,
+      {int? day, String? servantId}) async {
     try {
       var q = scoped(user)
           .where('active', isEqualTo: true)
           .where('birthMonth', isEqualTo: month);
       if (day != null) q = q.where('birthDay', isEqualTo: day);
+      if (servantId != null) {
+        q = q.where('assignedServantId', isEqualTo: servantId);
+      }
       final snap = await q.get();
       return snap.docs.map((d) => Woman.fromMap(d.id, d.data())).toList();
     } catch (e, st) {
@@ -368,7 +370,7 @@ class WomenRepository {
   Future<int> count(AppUser user, {bool? active, String? servantId}) async {
     var q = scoped(user);
     if (active != null) q = q.where('active', isEqualTo: active);
-    if (servantId != null && user.isFather) {
+    if (servantId != null) {
       q = q.where('assignedServantId', isEqualTo: servantId);
     }
     final agg = await q.count().get();

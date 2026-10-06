@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../domain/women_filter.dart';
@@ -51,10 +50,8 @@ class _FiltersSheetState extends ConsumerState<_FiltersSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(requireUserProvider);
     final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants =
-        user.isFather ? (ref.watch(activeServantsProvider).value ?? const []) : const [];
+    final servants = ref.watch(activeServantsProvider).value ?? const [];
 
     return Padding(
       padding: EdgeInsets.only(
@@ -75,8 +72,7 @@ class _FiltersSheetState extends ConsumerState<_FiltersSheet> {
               items: [(null, 'كل الشوارع'), for (final s in streets) (s.id, s.name)],
               onChanged: (v) => setState(() => _f = _f.copyWith(streetId: () => v)),
             ),
-            if (user.isFather)
-              _dropdown<String>(
+            _dropdown<String>(
                 label: 'الخادمة',
                 value: _f.servantId,
                 items: [(null, 'كل الخادمات'), for (final s in servants) (s.id, s.name)],

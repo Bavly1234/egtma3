@@ -67,12 +67,14 @@ void main() {
   });
 
   group('role permissions', () {
-    test('father has full access, servant limited', () {
+    test('father manages, servants act on all women', () {
       expect(Permissions.canManageWomen(father), isTrue);
       expect(Permissions.canManageWomen(servant), isFalse);
       expect(Permissions.canImportExport(servant), isFalse);
       expect(Permissions.canActOnWoman(servant, 's'), isTrue);
-      expect(Permissions.canActOnWoman(servant, 'other'), isFalse);
+      // Assignment is optional: every active servant can act on every woman.
+      expect(Permissions.canActOnWoman(servant, 'other'), isTrue);
+      expect(Permissions.canActOnWoman(servant, null), isTrue);
       expect(Permissions.canActOnWoman(father, 'other'), isTrue);
     });
 

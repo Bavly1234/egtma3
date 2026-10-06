@@ -97,16 +97,13 @@ class StatsRepository {
       {required DateRange range, int servants = 0}) async {
     try {
       final meetingId = Dates.dayId(Dates.currentOrLastMeeting(now));
-      final scoped = user.isFather
-          ? _women
-          : _women.where('assignedServantId', isEqualTo: user.id);
+      final scoped = _women;
       final results = await Future.wait<Object?>([
         _count(scoped),
         _count(scoped.where('active', isEqualTo: true)),
         meeting(meetingId),
         followUpCounts(
             range: range,
-            servantId: user.isFather ? null : user.id,
             now: now),
         _count(scoped
             .where('active', isEqualTo: true)
@@ -114,14 +111,13 @@ class StatsRepository {
             .where('birthDay', isEqualTo: now.day)),
       ]);
       final m = results[2] as MeetingSummary?;
-      final mine = user.isFather ? null : m?.byServant[user.id];
       return OverviewStats(
         totalWomen: results[0] as int,
         activeWomen: results[1] as int,
         totalServants: servants,
         meetingId: meetingId,
-        meetingPresent: mine?.present ?? (user.isFather ? m?.present ?? 0 : 0),
-        meetingAbsent: mine?.absent ?? (user.isFather ? m?.absent ?? 0 : 0),
+        meetingPresent: m?.present ?? 0,
+        meetingAbsent: m?.absent ?? 0,
         followUps: results[3] as FollowUpCounts,
         birthdaysToday: results[4] as int,
       );

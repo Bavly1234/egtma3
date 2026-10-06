@@ -89,7 +89,9 @@ class ReminderService {
 
   Future<List<Woman>> _upcomingBirthdayWomen(AppUser user, DateTime now) async {
     final months = {for (var i = 0; i < 3; i++) DateTime(now.year, now.month + i).month};
-    final lists = await Future.wait(months.map((m) => _women.birthdays(user, m)));
+    // Servants are reminded of the women assigned to them; the father of all.
+    final lists = await Future.wait(months.map((m) =>
+        _women.birthdays(user, m, servantId: user.isFather ? null : user.id)));
     return {for (final l in lists) for (final w in l) w.id: w}.values.toList();
   }
 
