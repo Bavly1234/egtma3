@@ -149,7 +149,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
                   message: filter.isEmpty
                       ? (canManage
                           ? 'أضيفي سيدة جديدة أو استوردي ملف Excel.'
-                          : 'لم يتم تعيين سيدات لك بعد.')
+                          : 'لم يضف الأب الكاهن أي سيدات بعد.')
                       : 'جربي تغيير البحث أو الفلاتر.',
                 );
               }
