@@ -21,6 +21,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   DocumentSnapshot? _cursor;
   bool _loading = false;
   bool _done = false;
+  Object? _error;
 
   @override
   void initState() {
@@ -30,7 +31,10 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
 
   Future<void> _load() async {
     if (_loading || _done) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final (items, cursor) =
           await ref.read(auditRepositoryProvider).page(after: _cursor);
@@ -40,7 +44,10 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
         _done = items.length < 40;
       });
     } catch (e) {
-      if (mounted) AppToast.error(context, e);
+      if (mounted) {
+        setState(() => _error = e);
+        AppToast.error(context, e);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -52,7 +59,10 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
         body: _items.isEmpty
             ? (_loading
                 ? const LoadingView()
-                : const EmptyState(icon: Icons.history, title: 'لا توجد تغييرات مسجلة'))
+                : _error == null
+                    ? const EmptyState(
+                        icon: Icons.history, title: 'لا توجد تغييرات مسجلة')
+                    : ErrorView(error: _error!, onRetry: _load))
             : ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: _items.length + 1,

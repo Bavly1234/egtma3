@@ -8,7 +8,6 @@ import '../../../core/utils/dates.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
-import '../../auth/domain/permissions.dart';
 import '../data/conference_repository.dart';
 
 class ConferencesScreen extends ConsumerWidget {
@@ -17,16 +16,13 @@ class ConferencesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(requireUserProvider);
-    final canManage = Permissions.canManageConferences(user);
     return Scaffold(
       appBar: AppBar(title: const Text('المؤتمرات')),
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push(Routes.conferenceNew),
-              icon: const Icon(Icons.add),
-              label: const Text('مؤتمر جديد', style: TextStyle(fontSize: 18)),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(Routes.conferenceNew),
+        icon: const Icon(Icons.add),
+        label: const Text('مؤتمر جديد', style: TextStyle(fontSize: 18)),
+      ),
       body: AsyncBody(
         value: ref.watch(conferencesProvider),
         builder: (list) => list.isEmpty
@@ -62,18 +58,16 @@ class ConferencesScreen extends ConsumerWidget {
                               label: const Text('الحضور'),
                             ),
                           ),
-                          if (canManage) ...[
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => context.push(Routes.conferenceStats(c.id)),
-                                icon: const Icon(Icons.bar_chart),
-                                label: const Text('الإحصائيات'),
-                              ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => context.push(Routes.conferenceStats(c.id)),
+                              icon: const Icon(Icons.bar_chart),
+                              label: const Text('الإحصائيات'),
                             ),
-                          ],
+                          ),
                         ]),
-                        if (canManage)
+                        if (user.isFather)
                           Align(
                             alignment: AlignmentDirectional.centerEnd,
                             child: TextButton.icon(

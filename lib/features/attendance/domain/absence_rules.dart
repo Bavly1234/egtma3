@@ -27,19 +27,29 @@ class ExistingSuggestion {
     required this.type,
     required this.status,
     required this.streakStartMeetingId,
+    this.createdAt,
   });
   final String id;
   final SuggestionType type;
   final SuggestionStatus status;
   final String? streakStartMeetingId;
+  final DateTime? createdAt;
 }
 
 class SuggestionDecision {
-  const SuggestionDecision({this.create, this.cancelIds = const []});
+  const SuggestionDecision(
+      {this.create, this.cancelIds = const [], this.streakStartMeetingId, this.reason});
   final SuggestionType? create;
   final List<String> cancelIds;
 
-  bool get isNoop => create == null && cancelIds.isEmpty;
+  /// Overrides the deterministic streak start (e.g. intermittent windows).
+  final String? streakStartMeetingId;
+
+  /// Overrides the display reason for the created suggestion.
+  final String? reason;
+
+  bool get isNoop =>
+      create == null && cancelIds.isEmpty;
 }
 
 /// Pure business logic. Mirrored exactly by functions/src/shared/rules.ts,
@@ -71,7 +81,7 @@ abstract final class AbsenceRules {
     return null;
   }
 
-  /// Rules A, B, D, E combined.
+  /// Rules A, B, D, E combined, plus intermittent Rules I and J.
   ///
   /// * Never creates a suggestion when an active one of the same type exists.
   /// * Creates at most one suggestion of each type per absence streak, so a
@@ -80,10 +90,19 @@ abstract final class AbsenceRules {
   /// * Escalating to a home visit cancels any still-active phone suggestion.
   /// * When she attends again (streak 0), suggestions that nobody has started
   ///   yet (pending/assigned) are cancelled; in-progress work is kept.
+  /// * Rules I/J (intermittent): alternating absences that never form a long
+  ///   consecutive streak still trigger افتقاد — 3+ absences in the last 5
+  ///   meetings → phone; 5+ in the last 8 → home visit. A suggestion of the
+  ///   same type created within [BusinessRules.intermittentCooldownDays] days
+  ///   blocks a new one, so nothing duplicates week after week. Pass [marks]
+  ///   (newest first or not — they are sorted inside) and [now] to enable
+  ///   Rules I/J; without them only the consecutive rules apply.
   static SuggestionDecision decide(
     AbsenceStreak streak,
-    List<ExistingSuggestion> existing,
-  ) {
+    List<ExistingSuggestion> existing, {
+    List<AttendanceMark>? marks,
+    DateTime? now,
+  }) {
     if (streak.count == 0) {
       final stale = existing
           .where((s) =>
@@ -95,7 +114,9 @@ abstract final class AbsenceRules {
     }
 
     final type = requiredType(streak.count);
-    if (type == null) return const SuggestionDecision();
+    if (type == null) {
+      return _decideIntermittent(streak, existing, marks, now);
+    }
 
     bool activeOf(SuggestionType t) =>
         existing.any((s) => s.type == t && s.status.isActive);
@@ -112,9 +133,96 @@ abstract final class AbsenceRules {
     }
 
     final shouldCreate = !activeOf(type) && !alreadyForStreak(type);
+    if (!shouldCreate) {
+      // Consecutive rule is silent (e.g. work already in progress):
+      // intermittent rules must not duplicate it.
+      if (activeOf(SuggestionType.phone) ||
+          activeOf(SuggestionType.homeVisit)) {
+        return SuggestionDecision(cancelIds: cancel);
+      }
+      return _decideIntermittent(streak, existing, marks, now,
+          extraCancelIds: cancel);
+    }
     return SuggestionDecision(
-      create: shouldCreate ? type : null,
+      create: type,
       cancelIds: cancel,
     );
+  }
+
+  /// Rules I/J: intermittent (alternating) absences.
+  static SuggestionDecision _decideIntermittent(
+    AbsenceStreak streak,
+    List<ExistingSuggestion> existing,
+    List<AttendanceMark>? marks,
+    DateTime? now, {
+    List<String> extraCancelIds = const [],
+  }) {
+    if (marks == null || now == null || marks.isEmpty) {
+      return SuggestionDecision(cancelIds: extraCancelIds);
+    }
+    bool activeOf(SuggestionType t) =>
+        existing.any((s) => s.type == t && s.status.isActive);
+    // Any active افتقاد in progress blocks a parallel intermittent one —
+    // no duplicates, no overlapping tasks for the same woman.
+    if (activeOf(SuggestionType.phone) ||
+        activeOf(SuggestionType.homeVisit)) {
+      return SuggestionDecision(cancelIds: extraCancelIds);
+    }
+    bool recent(SuggestionType t) => existing.any((s) =>
+        s.type == t &&
+        (s.status.isActive || s.status == SuggestionStatus.completed) &&
+        s.createdAt != null &&
+        now.difference(s.createdAt!).inDays <
+            BusinessRules.intermittentCooldownDays);
+
+    final sorted = marks.toList()
+      ..sort((a, b) => b.meetingId.compareTo(a.meetingId));
+    int absentIn(int window) => sorted
+        .take(window)
+        .where((m) => m.status == AttendanceStatus.absent)
+        .length;
+    final latestAbsentIds = sorted
+        .where((m) => m.status == AttendanceStatus.absent)
+        .map((m) => m.meetingId)
+        .toList();
+    if (latestAbsentIds.isEmpty) {
+      return SuggestionDecision(cancelIds: extraCancelIds);
+    }
+    final latestAbsent = latestAbsentIds.first;
+    bool alreadyForStreak(SuggestionType t, String start) => existing.any(
+        (s) => s.type == t && s.streakStartMeetingId == start);
+
+    // Rule J first (higher priority, mirrors Rule B escalation).
+    final in8 = absentIn(BusinessRules.intermittentHomeWindow);
+    if (in8 >= BusinessRules.intermittentHomeMin &&
+        !recent(SuggestionType.homeVisit)) {
+      final start = 'int_$latestAbsent';
+      if (!alreadyForStreak(SuggestionType.homeVisit, start)) {
+        return SuggestionDecision(
+          create: SuggestionType.homeVisit,
+          cancelIds: extraCancelIds,
+          streakStartMeetingId: start,
+          reason:
+              'غابت $in8 مرات من آخر ${BusinessRules.intermittentHomeWindow} اجتماعات (متقطعة).',
+        );
+      }
+      return SuggestionDecision(cancelIds: extraCancelIds);
+    }
+    // Rule I.
+    final in5 = absentIn(BusinessRules.intermittentPhoneWindow);
+    if (in5 >= BusinessRules.intermittentPhoneMin &&
+        !recent(SuggestionType.phone)) {
+      final start = 'int_$latestAbsent';
+      if (!alreadyForStreak(SuggestionType.phone, start)) {
+        return SuggestionDecision(
+          create: SuggestionType.phone,
+          cancelIds: extraCancelIds,
+          streakStartMeetingId: start,
+          reason:
+              'غابت $in5 مرات من آخر ${BusinessRules.intermittentPhoneWindow} اجتماعات (متقطعة).',
+        );
+      }
+    }
+    return SuggestionDecision(cancelIds: extraCancelIds);
   }
 }

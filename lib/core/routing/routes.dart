@@ -37,27 +37,23 @@ abstract final class Routes {
   static const import = '/import';
   static const export = '/export';
   static const users = '/users';
-  static const assign = '/assign';
   static const settings = '/settings';
   static const audit = '/audit';
+  static const monthlyReport = '/report/monthly';
 
   /// Paths only the father may open (also enforced by security rules).
+  /// Open to every active servant: women CRUD, conferences (create + stats),
+  /// all statistics screens, monthly report, import/export.
+  /// Assignment is by street only (managed on the Streets screen).
   static const fatherOnly = [
     stats,
-    womanNew,
     streets,
-    conferenceNew,
-    import,
-    export,
     users,
-    assign,
     audit,
   ];
 
-  /// Servants may open their own statistics page.
+  /// Servants share every statistics page with the father.
   static bool isFatherOnly(String location) =>
       location != statsServants &&
-      fatherOnly.any((p) => location == p || location.startsWith('$p/')) ||
-      location.endsWith('/edit') ||
-      (location.startsWith('/conferences/') && location.endsWith('/stats'));
+      fatherOnly.any((p) => location == p || location.startsWith('$p/'));
 }

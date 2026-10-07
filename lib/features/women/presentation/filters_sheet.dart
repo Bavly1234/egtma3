@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../streets/data/street_repository.dart';
-import '../../users/data/users_repository.dart';
 import '../domain/women_filter.dart';
 import 'women_list_controller.dart';
 
@@ -51,7 +50,6 @@ class _FiltersSheetState extends ConsumerState<_FiltersSheet> {
   @override
   Widget build(BuildContext context) {
     final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants = ref.watch(activeServantsProvider).value ?? const [];
 
     return Padding(
       padding: EdgeInsets.only(
@@ -72,13 +70,6 @@ class _FiltersSheetState extends ConsumerState<_FiltersSheet> {
               items: [(null, 'كل الشوارع'), for (final s in streets) (s.id, s.name)],
               onChanged: (v) => setState(() => _f = _f.copyWith(streetId: () => v)),
             ),
-            _dropdown<String>(
-                label: 'الخادمة',
-                value: _f.servantId,
-                items: [(null, 'كل الخادمات'), for (final s in servants) (s.id, s.name)],
-                onChanged: (v) =>
-                    setState(() => _f = _f.copyWith(servantId: () => v)),
-              ),
             _dropdown<bool>(
               label: 'الحالة',
               value: _f.active,

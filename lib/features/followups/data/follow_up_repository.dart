@@ -124,7 +124,6 @@ class FollowUpRepository {
         'womanName': woman.fullName,
         'servantId': actor.id,
         'servantName': actor.name,
-        'assignedServantId': woman.assignedServantId,
         'streetId': woman.streetId,
         'type': type.wire,
         'result': result.wire,
@@ -192,11 +191,11 @@ class FollowUpRepository {
         q = q.where('servantId', isEqualTo: servantId);
       }
       if (type != null) q = q.where('type', isEqualTo: type.wire);
-      final snap = await q
+      final snap = await AppFailure.guard(q
           .where('occurredAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
           .where('occurredAt', isLessThan: Timestamp.fromDate(to))
           .orderBy('occurredAt', descending: true)
-          .get();
+          .get());
       return snap.docs.map((d) => FollowUp.fromMap(d.id, d.data())).toList();
     } catch (e, st) {
       throw AppFailure.from(e, st);

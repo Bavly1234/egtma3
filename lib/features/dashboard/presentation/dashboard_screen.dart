@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
+import '../../attendance/presentation/attendance_controller.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
 import '../../notifications/data/notification_repository.dart';
@@ -162,12 +163,15 @@ class _ServantBody extends ConsumerWidget {
         value: '${o?.meetingAbsent ?? '—'}',
         color: AppColors.absent,
         background: AppColors.absentLight,
-        onTap: () => context.go(Routes.attendance),
+        onTap: () {
+          ref.read(absentOnlyProvider.notifier).set(true);
+          context.go(Routes.attendance);
+        },
       ),
       const SizedBox(height: 12),
       StatCard(
         icon: Icons.insights,
-        title: 'إحصائياتي',
+        title: 'إحصائيات الخادمات',
         value: '',
         onTap: () => context.push(Routes.statsServants),
       ),
@@ -226,7 +230,11 @@ class _FatherBody extends ConsumerWidget {
             title: 'الغائبات',
             value: v(o?.meetingAbsent),
             color: AppColors.absent,
-            background: AppColors.absentLight),
+            background: AppColors.absentLight,
+            onTap: () {
+              ref.read(absentOnlyProvider.notifier).set(true);
+              context.go(Routes.attendance);
+            }),
       ]),
       const SectionTitle('الافتقاد (هذا الشهر)'),
       grid([

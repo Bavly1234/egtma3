@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:egtma3/core/constants/enums.dart';
 import 'package:egtma3/core/constants/firestore_paths.dart';
 import 'package:egtma3/features/attendance/data/attendance_repository.dart';
@@ -30,7 +31,7 @@ void main() {
     women = WomenRepository(db, StreetRepository(db), audit);
   });
 
-  Future<Woman> addWoman(String name, {String street = 'شارع مار جرجس', String? servantId}) async {
+  Future<Woman> addWoman(String name, {String street = 'شارع مار جرجس'}) async {
     final id = await women.create(
       WomanDraft(
         fullName: name,
@@ -38,8 +39,6 @@ void main() {
         address: '10 $street',
         phone: '01012345678',
         dateOfBirth: DateTime(1970, 3, 15),
-        assignedServantId: servantId,
-        assignedServantName: servantId == null ? null : 'خادمة',
       ),
       father,
     );
@@ -57,29 +56,39 @@ void main() {
     expect((await db.collection(FsPaths.auditLogs).get()).size, 3);
   });
 
-  test('servants see all women; "mine" filter uses the optional assignment', () async {
-    await addWoman('مريم أحمد', servantId: 's1');
-    await addWoman('سعاد جرجس', servantId: 's2', street: 'شارع النصر');
+  test('servants see all women (no global assignment)', () async {
+    await addWoman('مريم أحمد');
+    await addWoman('سعاد جرجس', street: 'شارع النصر');
     final all = await women.page(servant, WomenFilter.empty);
     expect(all.items.length, 2);
-    final mine = await women.page(servant, const WomenFilter(servantId: 's1'));
-    expect(mine.items.map((w) => w.fullName), ['مريم أحمد']);
-    final byStreet = await women.page(father, WomenFilter(streetId: mine.items.first.streetId));
+    final byStreet = await women.page(father, WomenFilter(streetId: all.items.first.streetId));
     expect(byStreet.items.length, 1);
     final search = await women.page(father, const WomenFilter(query: 'سعاد'));
     expect(search.items.single.fullName, 'سعاد جرجس');
   });
 
-  test('assign multiple women', () async {
-    final a = await addWoman('أ ب ج');
-    final b = await addWoman('د هـ و');
-    await women.assign([a.id, b.id], servant, father);
-    final mine = await women.page(servant, const WomenFilter(servantId: 's1'));
-    expect(mine.items.length, 2);
+  test('افتقاد inherits the street servant (the only assignment)', () async {
+    final w = await addWoman('مريم أحمد');
+    await db
+        .collection(FsPaths.streets)
+        .doc(w.streetId)
+        .set({'servantId': 's1', 'servantName': 'خادمة 1'}, SetOptions(merge: true));
+    final repo = FollowUpRepository(db, audit, AbsenceProcessor(db, NotificationWriter(db)));
+    await repo.record(
+      woman: w,
+      type: FollowUpType.phoneCall,
+      result: FollowUpResult.reached,
+      notes: 'بخير',
+      actor: servant,
+      completes: null,
+    );
+    final fu = await db.collection(FsPaths.followUps).get();
+    expect(fu.size, 1);
+    expect(fu.docs.single.get('servantId'), 's1');
   });
 
   test('attendance: marking twice never duplicates (deterministic id)', () async {
-    final w = await addWoman('مريم أحمد', servantId: 's1');
+    final w = await addWoman('مريم أحمد');
     final repo = AttendanceRepository(db, audit);
     await repo.mark('2026-09-30', w, AttendanceStatus.absent, servant);
     await repo.mark('2026-09-30', w, AttendanceStatus.present, servant,
@@ -98,7 +107,7 @@ void main() {
   });
 
   test('Rule F: conference attendance does not touch Wednesday attendance', () async {
-    final w = await addWoman('مريم أحمد', servantId: 's1');
+    final w = await addWoman('مريم أحمد');
     final conf = ConferenceRepository(db, audit);
     final id = await conf.create('مؤتمر السيدات 2026',
         [DateTime(2026, 11, 6), DateTime(2026, 11, 7), DateTime(2026, 11, 13)], father);
@@ -118,7 +127,7 @@ void main() {
   });
 
   test('recording a follow-up keeps history and completes the suggestion atomically', () async {
-    final w = await addWoman('مريم أحمد', servantId: 's1');
+    final w = await addWoman('مريم أحمد');
     await db.collection(FsPaths.suggestions).doc('sg1').set({
       'womanId': w.id,
       'womanName': w.fullName,

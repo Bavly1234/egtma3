@@ -62,9 +62,22 @@ class NotificationWriter {
     required int count,
   }) async {
     final isHome = type == SuggestionType.homeVisit;
+    // The ONLY assignment is by street: notify the street's servant
+    // (plus the fathers for home visits, or when the street has no servant).
+    // Ids are deterministic so concurrent phones dedupe via create-rejection.
+    String? streetServantId;
+    try {
+      final streetDoc = await _db
+          .collection(FsPaths.streets)
+          .doc(woman.streetId)
+          .get();
+      streetServantId = streetDoc.data()?['servantId'] as String?;
+    } catch (e) {
+      AppLog.w('Street servant lookup failed', e);
+    }
     final recipients = <String>{
-      ?woman.assignedServantId,
-      if (isHome || woman.assignedServantId == null) ...await fatherIds(),
+      ?streetServantId,
+      if (isHome || streetServantId == null) ...await fatherIds(),
     };
     for (final r in recipients) {
       await createOnce(

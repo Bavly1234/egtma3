@@ -9,13 +9,12 @@ import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
-import '../../users/presentation/servant_picker.dart';
 import '../data/women_repository.dart';
 import '../domain/woman.dart';
 import '../domain/woman_validator.dart';
 
-/// Add (womanId == null) or edit a woman. Father only (route-guarded and
-/// enforced by security rules).
+/// Add (womanId == null) or edit a woman. Every active servant (full women
+/// CRUD — route-open and enforced by security rules).
 class WomanFormScreen extends ConsumerWidget {
   const WomanFormScreen({super.key, this.womanId});
   final String? womanId;
@@ -52,9 +51,7 @@ class _FormState extends ConsumerState<_Form> {
       text: widget.initial?.dateOfBirth == null
           ? ''
           : Dates.display(widget.initial!.dateOfBirth));
-  late bool _active = widget.initial?.active ?? true;
-  late String? _servantId = widget.initial?.assignedServantId;
-  late String? _servantName = widget.initial?.assignedServantName;
+  late final bool _active = widget.initial?.active ?? true;
   bool _busy = false;
 
   @override
@@ -92,8 +89,6 @@ class _FormState extends ConsumerState<_Form> {
       dateOfBirth: _dob,
       active: _active,
       notes: _notes.text,
-      assignedServantId: _servantId,
-      assignedServantName: _servantName,
     );
     final repo = ref.read(womenRepositoryProvider);
     String? newId;
@@ -183,31 +178,6 @@ class _FormState extends ConsumerState<_Form> {
             validator: (_) => _dobText.text.trim().isNotEmpty && _dob == null
                 ? 'اكتبي التاريخ هكذا: 15/03/1970'
                 : WomanValidator.dateOfBirth(_dob),
-          ),
-          gap,
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.badge, size: 30),
-              title: const Text('الخادمة المسؤولة'),
-              subtitle: Text(_servantName ?? 'غير معينة'),
-              trailing: const Icon(Icons.edit),
-              onTap: () async {
-                final c = await pickServant(context, ref, allowNone: true);
-                if (c != null) {
-                  setState(() {
-                    _servantId = c.value?.id;
-                    _servantName = c.value?.name;
-                  });
-                }
-              },
-            ),
-          ),
-          gap,
-          SwitchListTile(
-            value: _active,
-            onChanged: (v) => setState(() => _active = v),
-            title: const Text('نشطة'),
-            subtitle: const Text('السيدات غير النشطات لا يظهرن في الحضور'),
           ),
           gap,
           TextFormField(

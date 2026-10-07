@@ -5,6 +5,7 @@ import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
 import '../../../core/utils/arabic_text.dart';
+import '../../auth/domain/app_user.dart';
 import '../domain/street.dart';
 
 class StreetRepository {
@@ -63,6 +64,22 @@ class StreetRepository {
       throw AppFailure.from(e, st);
     }
   }
+
+  /// Assigns (or unassigns with null) a servant responsible for a whole street.
+  /// This is the ONLY assignment in the app: every woman belongs to her
+  /// street's servant. Managed from the Streets screen (father).
+  Future<void> setServant(
+      String streetId, AppUser? servant, AppUser actor) async {
+    try {
+      await _col.doc(streetId).set({
+        'servantId': servant?.id,
+        'servantName': servant?.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
 }
 
 final streetRepositoryProvider =
@@ -70,3 +87,9 @@ final streetRepositoryProvider =
 
 final streetsProvider = StreamProvider<List<Street>>(
     (ref) => ref.watch(streetRepositoryProvider).watchAll());
+
+/// Streets keyed by id — the single source of street→servant assignment.
+final streetMapProvider = Provider<Map<String, Street>>((ref) {
+  final streets = ref.watch(streetsProvider).value ?? const [];
+  return {for (final s in streets) s.id: s};
+});

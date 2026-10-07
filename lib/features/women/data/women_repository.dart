@@ -37,9 +37,6 @@ class WomenRepository {
 
   Query<Map<String, dynamic>> buildQuery(AppUser user, WomenFilter f) {
     var q = scoped(user);
-    if (f.servantId != null) {
-      q = q.where('assignedServantId', isEqualTo: f.servantId);
-    }
     if (f.streetId != null) q = q.where('streetId', isEqualTo: f.streetId);
     if (f.active != null) q = q.where('active', isEqualTo: f.active);
     if (f.birthMonth != null) {
@@ -69,7 +66,7 @@ class WomenRepository {
     try {
       var q = buildQuery(user, filter).limit(limit);
       if (after != null) q = q.startAfterDocument(after);
-      final snap = await q.get();
+      final snap = await AppFailure.guard(q.get());
       final items = snap.docs
           .map((d) => Woman.fromMap(d.id, d.data()))
           .where(filter.matchesClientSide)
@@ -109,17 +106,17 @@ class WomenRepository {
         SetOptions(merge: true));
   }
 
-  /// Active suggestions of the given women (father-only use).
+  /// Active suggestions of the given women (used when deactivating/deleting).
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _activeSuggestions(
       List<String> womanIds) async {
     final out = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     for (var i = 0; i < womanIds.length; i += 30) {
       final chunk = womanIds.sublist(i, (i + 30).clamp(0, womanIds.length));
-      final snap = await _db
+      final snap = await AppFailure.guard(_db
           .collection(FsPaths.suggestions)
           .where('womanId', whereIn: chunk)
           .where('status', whereIn: SuggestionStatus.activeWires)
-          .get();
+          .get());
       out.addAll(snap.docs);
     }
     return out;
@@ -172,7 +169,7 @@ class WomenRepository {
 
   Future<void> update(String id, WomanDraft draft, AppUser actor) async {
     try {
-      final old = (await col.doc(id).get()).data();
+      final old = (await AppFailure.guard(col.doc(id).get())).data();
       final batch = _db.batch();
       final streetId = _streets.upsertInBatch(batch, draft.streetName);
       final oldStreet = old?['streetId'] as String?;
@@ -196,7 +193,7 @@ class WomenRepository {
     }
   }
 
-  /// Servants may edit notes of their assigned women only (rules enforce it).
+  /// Edits notes (any active staff — servants have full women CRUD).
   Future<void> updateNotes(String id, String notes, AppUser actor) async {
     try {
       await col.doc(id).update({
@@ -232,10 +229,11 @@ class WomenRepository {
     }
   }
 
-  /// Hard delete (father only). History records stay for statistics.
+  /// Hard delete (any active staff — servants have full women CRUD).
+  /// History records stay for statistics.
   Future<void> delete(String id, String name, AppUser actor) async {
     try {
-      final old = (await col.doc(id).get()).data();
+      final old = (await AppFailure.guard(col.doc(id).get())).data();
       final batch = _db.batch();
       for (final d in await _activeSuggestions([id])) {
         batch.update(d.reference, {
@@ -258,69 +256,6 @@ class WomenRepository {
     }
   }
 
-  /// Assigns (or unassigns with null) one or many women.
-  Future<void> assign(
-      List<String> womanIds, AppUser? servant, AppUser actor) async {
-    try {
-      // Move the woman's history to the new servant so she can see past
-      // attendance, follow-ups and suggestions (servants may only read
-      // records that carry their own id).
-      final related = <(DocumentReference, Map<String, Object?>)>[];
-      for (var i = 0; i < womanIds.length; i += 30) {
-        final chunk = womanIds.sublist(i, (i + 30).clamp(0, womanIds.length));
-        Future<void> collect(String collection, Map<String, Object?> fields) async {
-          final snap =
-              await _db.collection(collection).where('womanId', whereIn: chunk).get();
-          related.addAll(snap.docs.map((d) => (d.reference, fields)));
-        }
-
-        await collect(FsPaths.suggestions, {
-          'assignedServantId': servant?.id,
-          'assignedServantName': servant?.name,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        await collect(FsPaths.attendance, {'servantId': servant?.id});
-        await collect(FsPaths.conferenceAttendance, {'servantId': servant?.id});
-        await collect(FsPaths.followUps, {'assignedServantId': servant?.id});
-      }
-      for (var i = 0; i < related.length; i += 400) {
-        final batch = _db.batch();
-        for (final (ref, fields) in related.skip(i).take(400)) {
-          batch.update(ref, fields);
-        }
-        await batch.commit();
-      }
-      for (var i = 0; i < womanIds.length; i += 200) {
-        final chunk = womanIds.skip(i).take(200);
-        final batch = _db.batch();
-        for (final id in chunk) {
-          batch.update(col.doc(id), {
-            'assignedServantId': servant?.id,
-            'assignedServantName': servant?.name,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-          _audit.addToBatch(batch,
-              actor: actor,
-              action: AuditAction.servantAssigned,
-              entityType: 'woman',
-              entityId: id,
-              summary: servant?.name ?? 'إلغاء التعيين');
-        }
-        await batch.commit();
-      }
-    } catch (e, st) {
-      throw AppFailure.from(e, st);
-    }
-  }
-
-  Future<int> assignByStreet(
-      String streetId, AppUser servant, AppUser actor) async {
-    final snap = await col.where('streetId', isEqualTo: streetId).get();
-    final ids = snap.docs.map((d) => d.id).toList();
-    await assign(ids, servant, actor);
-    return ids.length;
-  }
-
   /// Existing identities that may collide with imported rows. Uses `whereIn`
   /// on indexed fields instead of downloading every woman.
   Future<List<PersonIdentity>> identitiesMatching({
@@ -331,7 +266,8 @@ class WomenRepository {
     Future<void> run(String field, List<String> values) async {
       for (var i = 0; i < values.length; i += 30) {
         final chunk = values.sublist(i, (i + 30).clamp(0, values.length));
-        final snap = await col.where(field, whereIn: chunk).get();
+        final snap =
+            await AppFailure.guard(col.where(field, whereIn: chunk).get());
         for (final d in snap.docs) {
           final w = Woman.fromMap(d.id, d.data());
           out[d.id] = PersonIdentity(
@@ -350,40 +286,33 @@ class WomenRepository {
   }
 
   /// Women whose birthday falls in [month] (optionally on [day]).
-  Future<List<Woman>> birthdays(AppUser user, int month,
-      {int? day, String? servantId}) async {
+  Future<List<Woman>> birthdays(AppUser user, int month, {int? day}) async {
     try {
       var q = scoped(user)
           .where('active', isEqualTo: true)
           .where('birthMonth', isEqualTo: month);
       if (day != null) q = q.where('birthDay', isEqualTo: day);
-      if (servantId != null) {
-        q = q.where('assignedServantId', isEqualTo: servantId);
-      }
-      final snap = await q.get();
+      final snap = await AppFailure.guard(q.get());
       return snap.docs.map((d) => Woman.fromMap(d.id, d.data())).toList();
     } catch (e, st) {
       throw AppFailure.from(e, st);
     }
   }
 
-  Future<int> count(AppUser user, {bool? active, String? servantId}) async {
+  Future<int> count(AppUser user, {bool? active}) async {
     var q = scoped(user);
     if (active != null) q = q.where('active', isEqualTo: active);
-    if (servantId != null) {
-      q = q.where('assignedServantId', isEqualTo: servantId);
-    }
-    final agg = await q.count().get();
+    final agg = await AppFailure.guard(q.count().get());
     return agg.count ?? 0;
   }
 
   Future<List<Woman>> topBy(AppUser user, String field,
       {int limit = 10}) async {
-    final snap = await scoped(user)
+    final snap = await AppFailure.guard(scoped(user)
         .where('active', isEqualTo: true)
         .orderBy(field, descending: true)
         .limit(limit)
-        .get();
+        .get());
     return snap.docs.map((d) => Woman.fromMap(d.id, d.data())).toList();
   }
 }

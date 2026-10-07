@@ -36,6 +36,18 @@ abstract final class Dates {
   static bool isMeetingDay(DateTime d) =>
       d.weekday == BusinessRules.meetingWeekday;
 
+  /// Wednesday 9pm cutoff: after this moment, unmarked women of that
+  /// meeting count as absent (auto-filled by the app).
+  static const cutoffHour = 21;
+
+  static DateTime meetingCutoff(DateTime meetingDay) {
+    final d = dateOnly(meetingDay);
+    return DateTime(d.year, d.month, d.day, cutoffHour);
+  }
+
+  static bool cutoffPassed(DateTime meetingDay, DateTime now) =>
+      !now.isBefore(meetingCutoff(meetingDay));
+
   /// Parses user/Excel dates: dd/MM/yyyy, d-M-yy, yyyy-MM-dd, Excel serials.
   static DateTime? parseFlexible(Object? value) {
     if (value == null) return null;

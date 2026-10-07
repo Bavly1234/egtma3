@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/firestore_paths.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/domain/app_user.dart';
@@ -59,14 +60,18 @@ class AuditRepository {
     DocumentSnapshot? after,
     int limit = 40,
   }) async {
-    Query<Map<String, dynamic>> q =
-        _col.orderBy('createdAt', descending: true).limit(limit);
-    if (after != null) q = q.startAfterDocument(after);
-    final snap = await q.get();
-    return (
-      snap.docs.map((d) => AuditEntry.fromMap(d.id, d.data())).toList(),
-      snap.docs.isEmpty ? null : snap.docs.last,
-    );
+    try {
+      Query<Map<String, dynamic>> q =
+          _col.orderBy('createdAt', descending: true).limit(limit);
+      if (after != null) q = q.startAfterDocument(after);
+      final snap = await AppFailure.guard(q.get());
+      return (
+        snap.docs.map((d) => AuditEntry.fromMap(d.id, d.data())).toList(),
+        snap.docs.isEmpty ? null : snap.docs.last,
+      );
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
   }
 }
 

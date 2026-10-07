@@ -19,7 +19,7 @@ class StatsRepository {
   final FirebaseFirestore _db;
 
   Future<int> _count(Query<Map<String, dynamic>> q) async =>
-      (await q.count().get()).count ?? 0;
+      (await AppFailure.guard(q.count().get())).count ?? 0;
 
   CollectionReference<Map<String, dynamic>> get _women =>
       _db.collection(FsPaths.women);
@@ -29,7 +29,8 @@ class StatsRepository {
       _db.collection(FsPaths.suggestions);
 
   Future<MeetingSummary?> meeting(String id) async {
-    final s = await _db.collection(FsPaths.meetings).doc(id).get();
+    final s = await AppFailure.guard(
+        _db.collection(FsPaths.meetings).doc(id).get());
     return s.exists ? MeetingSummary.fromMap(s.id, s.data()!) : null;
   }
 
@@ -127,42 +128,62 @@ class StatsRepository {
   }
 
   /// Per-servant statistics. Meeting attendance is aggregated over meetings
-  /// in [StatsFilter.range] using the per-servant counters.
+  /// in [StatsFilter.range] using the per-servant counters (recorded from the
+  /// street assignment at mark time). The ONLY assignment is by street:
+  /// "assigned women" means women living in this servant's streets, and
+  /// consecutive absences are counted among them.
   Future<ServantStats> servantStats(
       AppUser servant, StatsFilter f, DateTime now) async {
     try {
-      final meetings = await _db
+      final meetings = await AppFailure.guard(_db
           .collection(FsPaths.meetings)
           .where(FieldPath.documentId, isGreaterThanOrEqualTo: f.range.fromId)
           .where(FieldPath.documentId,
               isLessThanOrEqualTo: f.range.toIdInclusive)
-          .get();
+          .get());
       var present = 0, absent = 0;
       for (final d in meetings.docs) {
         final c = MeetingSummary.fromMap(d.id, d.data()).byServant[servant.id];
         present += c?.present ?? 0;
         absent += c?.absent ?? 0;
       }
-      final mine = _women.where('assignedServantId', isEqualTo: servant.id);
-      final r = await Future.wait<Object>([
-        _count(mine.where('active', isEqualTo: true)),
-        followUpCounts(
-            range: f.range,
-            servantId: servant.id,
-            streetId: f.streetId,
-            type: f.followUpType,
-            now: now),
-        _count(mine.where('consecutiveAbsences',
-            isGreaterThanOrEqualTo: BusinessRules.phoneThreshold)),
-      ]);
+      // Streets of this servant (single-field query, no composite index).
+      final streetsSnap = await AppFailure.guard(_db
+          .collection(FsPaths.streets)
+          .where('servantId', isEqualTo: servant.id)
+          .get());
+      var assignedWomen = 0;
+      final streetIds = <String>{};
+      for (final d in streetsSnap.docs) {
+        streetIds.add(d.id);
+        assignedWomen += (d.data()['womenCount'] as num?)?.toInt() ?? 0;
+      }
+      // Women with an absence streak in those streets (single range filter,
+      // narrowed in memory — no composite index needed).
+      var withConsecutiveAbsences = 0;
+      if (streetIds.isNotEmpty) {
+        final streakSnap = await AppFailure.guard(_women
+            .where('consecutiveAbsences',
+                isGreaterThanOrEqualTo: BusinessRules.phoneThreshold)
+            .get());
+        withConsecutiveAbsences = streakSnap.docs
+            .where((d) => streetIds.contains(d.data()['streetId'] as String?))
+            .length;
+      }
+      final fu = await followUpCounts(
+          range: f.range,
+          servantId: servant.id,
+          streetId: f.streetId,
+          type: f.followUpType,
+          now: now);
       return ServantStats(
         servantId: servant.id,
         servantName: servant.name,
-        assignedWomen: r[0] as int,
-        followUps: r[1] as FollowUpCounts,
+        assignedWomen: assignedWomen,
+        followUps: fu,
         meetingPresent: present,
         meetingAbsent: absent,
-        withConsecutiveAbsences: r[2] as int,
+        withConsecutiveAbsences: withConsecutiveAbsences,
       );
     } catch (e, st) {
       throw AppFailure.from(e, st);

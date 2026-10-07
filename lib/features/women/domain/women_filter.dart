@@ -35,7 +35,6 @@ class WomenFilter {
   const WomenFilter({
     this.query = '',
     this.streetId,
-    this.servantId,
     this.active,
     this.birthMonth,
     this.followUp = FollowUpFilter.any,
@@ -46,7 +45,6 @@ class WomenFilter {
 
   final String query;
   final String? streetId;
-  final String? servantId;
   final bool? active;
   final int? birthMonth;
   final FollowUpFilter followUp;
@@ -60,7 +58,6 @@ class WomenFilter {
 
   bool get hasServerFilters =>
       streetId != null ||
-      servantId != null ||
       active != null ||
       birthMonth != null ||
       followUp != FollowUpFilter.any ||
@@ -75,7 +72,6 @@ class WomenFilter {
   int get activeCount => [
         query.trim().isNotEmpty,
         streetId != null,
-        servantId != null,
         active != null,
         birthMonth != null,
         followUp != FollowUpFilter.any,
@@ -119,7 +115,6 @@ class WomenFilter {
   WomenFilter copyWith({
     String? query,
     String? Function()? streetId,
-    String? Function()? servantId,
     bool? Function()? active,
     int? Function()? birthMonth,
     FollowUpFilter? followUp,
@@ -130,7 +125,6 @@ class WomenFilter {
       WomenFilter(
         query: query ?? this.query,
         streetId: streetId != null ? streetId() : this.streetId,
-        servantId: servantId != null ? servantId() : this.servantId,
         active: active != null ? active() : this.active,
         birthMonth: birthMonth != null ? birthMonth() : this.birthMonth,
         followUp: followUp ?? this.followUp,

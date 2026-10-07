@@ -10,6 +10,7 @@ import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
 import '../../attendance/presentation/attendance_controller.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../streets/data/street_repository.dart';
 import '../../women/domain/woman.dart';
 import '../data/conference_repository.dart';
 import '../domain/conference.dart';
@@ -44,7 +45,9 @@ class ConferenceAttendanceScreen extends ConsumerWidget {
           child: Scaffold(
             appBar: AppBar(
               title: Text(c.name),
-              actions: const [SyncStatusChip()],
+              actions: const [
+                SyncStatusChip(),
+              ],
               bottom: TabBar(
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white70,
@@ -84,9 +87,13 @@ class _DayListState extends ConsumerState<_DayList>
   bool get wantKeepAlive => true;
 
   void _mark(Woman w, AttendanceStatus s) {
+    // The ONLY assignment is by street.
+    final streets = ref.read(streetMapProvider);
     ref.read(syncControllerProvider.notifier).track(ref
         .read(conferenceRepositoryProvider)
-        .mark(widget.conference.id, widget.day.id, w, s, ref.read(requireUserProvider)));
+        .mark(widget.conference.id, widget.day.id, w, s,
+            ref.read(requireUserProvider),
+            servantId: streets[w.streetId]?.servantId));
   }
 
   @override
@@ -97,6 +104,7 @@ class _DayListState extends ConsumerState<_DayList>
                 (conferenceId: widget.conference.id, dayId: widget.day.id)))
             .value ??
         const {};
+    final streets = ref.watch(streetMapProvider);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -133,6 +141,8 @@ class _DayListState extends ConsumerState<_DayList>
                 }
                 final w = list[i - 1];
                 final s = statuses[w.id];
+                final servantLabel =
+                    streets[w.streetId]?.servantName ?? 'غير معينة';
                 return Card(
                   color: switch (s) {
                     AttendanceStatus.present => AppColors.presentLight,
@@ -141,15 +151,35 @@ class _DayListState extends ConsumerState<_DayList>
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(10),
-                    child: Row(children: [
-                      Expanded(
-                          child: Text(w.fullName,
-                              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700))),
-                      _btn('حاضر', s == AttendanceStatus.present, AppColors.present,
-                          () => _mark(w, AttendanceStatus.present)),
-                      const SizedBox(width: 8),
-                      _btn('غائب', s == AttendanceStatus.absent, AppColors.absent,
-                          () => _mark(w, AttendanceStatus.absent)),
+                    child: Column(children: [
+                      Row(children: [
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(w.fullName,
+                                  style: const TextStyle(
+                                      fontSize: 19, fontWeight: FontWeight.w700)),
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.badge,
+                                    size: 16, color: AppColors.textMuted),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'الخادمة (حسب الشارع): $servantLabel',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textMuted),
+                                  ),
+                                ),
+                              ]),
+                            ])),
+                        _btn('حاضر', s == AttendanceStatus.present, AppColors.present,
+                            () => _mark(w, AttendanceStatus.present)),
+                        const SizedBox(width: 8),
+                        _btn('غائب', s == AttendanceStatus.absent, AppColors.absent,
+                            () => _mark(w, AttendanceStatus.absent)),
+                      ]),
                     ]),
                   ),
                 );

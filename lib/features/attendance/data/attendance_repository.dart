@@ -55,6 +55,7 @@ class AttendanceRepository {
     AttendanceStatus status,
     AppUser actor, {
     Map<String, AttendanceStatus> previous = const {},
+    Map<String, String?> meetingServants = const {},
   }) async {
     final list = women.where((w) => previous[w.id] != status).toList();
     for (var i = 0; i < list.length; i += 150) {
@@ -62,11 +63,15 @@ class AttendanceRepository {
       final top = <String, int>{};
       final byStreet = <String, Map<String, int>>{};
       final byServant = <String, Map<String, int>>{};
+      String servantKey(Woman w) =>
+          // Only the per-meeting assignment counts; no global assignment.
+          meetingServants[w.id] ?? 'unassigned';
+
       void add(AttendanceStatus s, int sign, Woman w) {
         top.update(s.wire, (v) => v + sign, ifAbsent: () => sign);
         (byStreet[w.streetId.isEmpty ? 'unknown' : w.streetId] ??= {})
             .update(s.wire, (v) => v + sign, ifAbsent: () => sign);
-        (byServant[w.assignedServantId ?? 'unassigned'] ??= {})
+        (byServant[servantKey(w)] ??= {})
             .update(s.wire, (v) => v + sign, ifAbsent: () => sign);
       }
 
@@ -74,7 +79,7 @@ class AttendanceRepository {
         batch.set(_col.doc(AttendanceRecord.docId(meetingId, w.id)), {
           'meetingId': meetingId,
           'womanId': w.id,
-          'servantId': w.assignedServantId,
+          'servantId': servantKey(w) == 'unassigned' ? null : servantKey(w),
           'streetId': w.streetId,
           'status': status.wire,
           'markedBy': actor.id,
@@ -111,17 +116,103 @@ class AttendanceRepository {
     }
   }
 
+  /// Auto-marks every still-unmarked active woman as absent for [meetingId]
+  /// (Wednesday 9pm cutoff). Only creates missing records — existing marks
+  /// are never touched — so re-running is safe. Sets `autoAbsentDone`.
+  /// Returns the ids of the newly-marked women.
+  Future<List<String>> autoFillAbsent(String meetingId, AppUser actor) async {
+    // Already done (possibly by another phone): never count absences twice.
+    final meetingDoc = await AppFailure.guard(
+        _db.collection(FsPaths.meetings).doc(meetingId).get());
+    if (meetingDoc.data()?['autoAbsentDone'] == true) return const [];
+    final attSnap = await AppFailure.guard(
+        _col.where('meetingId', isEqualTo: meetingId).get());
+    final marked = {
+      for (final d in attSnap.docs)
+        (d.data()['womanId'] as String?) ?? d.id
+    };
+    final womenSnap = await AppFailure.guard(_db
+        .collection(FsPaths.women)
+        .where('active', isEqualTo: true)
+        .get());
+    final unmarked =
+        womenSnap.docs.where((d) => !marked.contains(d.id)).toList();
+    final streetsSnap =
+        await AppFailure.guard(_db.collection(FsPaths.streets).get());
+    final streetServant = {
+      for (final d in streetsSnap.docs)
+        d.id: d.data()['servantId'] as String?,
+    };
+    String servantKey(Map<String, dynamic> w) =>
+        streetServant[w['streetId'] as String?] ?? 'unassigned';
+
+    final filledIds = <String>[];
+    for (var i = 0; i < unmarked.length; i += 150) {
+      final batch = _db.batch();
+      final top = <String, int>{};
+      final byStreet = <String, Map<String, int>>{};
+      final byServant = <String, Map<String, int>>{};
+      for (final d in unmarked.skip(i).take(150)) {
+        final w = d.data();
+        final streetKey = (w['streetId'] as String?)?.isNotEmpty == true
+            ? w['streetId'] as String
+            : 'unknown';
+        batch.set(_col.doc(AttendanceRecord.docId(meetingId, d.id)), {
+          'meetingId': meetingId,
+          'womanId': d.id,
+          'servantId': streetServant[w['streetId'] as String?],
+          'streetId': w['streetId'],
+          'status': AttendanceStatus.absent.wire,
+          'markedBy': actor.id,
+          'markedAt': FieldValue.serverTimestamp(),
+          'autoMarked': true,
+          if ((w['isDemo'] as bool?) == true) 'isDemo': true,
+        });
+        top.update('absent', (v) => v + 1, ifAbsent: () => 1);
+        (byStreet[streetKey] ??= {})
+            .update('absent', (v) => v + 1, ifAbsent: () => 1);
+        (byServant[servantKey(w)] ??= {})
+            .update('absent', (v) => v + 1, ifAbsent: () => 1);
+        filledIds.add(d.id);
+      }
+      Map<String, Object> inc(Map<String, int> m) => {
+            for (final e in m.entries) e.key: FieldValue.increment(e.value),
+          };
+      batch.set(
+        _db.collection(FsPaths.meetings).doc(meetingId),
+        {
+          ...inc(top),
+          'byStreet': {for (final e in byStreet.entries) e.key: inc(e.value)},
+          'byServant': {for (final e in byServant.entries) e.key: inc(e.value)},
+          'autoAbsentDone': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      await batch.commit();
+    }
+    if (unmarked.isEmpty) {
+      await _db.collection(FsPaths.meetings).doc(meetingId).set(
+        {'autoAbsentDone': true, 'updatedAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
+    }
+    return filledIds;
+  }
+
   /// Removes a mark and its contribution to the meeting counters.
-  Future<void> clear(String meetingId, Woman w, AttendanceStatus previous) async {
+  Future<void> clear(String meetingId, Woman w, AttendanceStatus previous,
+      {String? meetingServantId}) async {
     final batch = _db.batch();
     batch.delete(_col.doc(AttendanceRecord.docId(meetingId, w.id)));
     final dec = FieldValue.increment(-1);
+    final servantKey = meetingServantId ?? 'unassigned';
     batch.set(
       _db.collection(FsPaths.meetings).doc(meetingId),
       {
         previous.wire: dec,
         'byStreet': {(w.streetId.isEmpty ? 'unknown' : w.streetId): {previous.wire: dec}},
-        'byServant': {(w.assignedServantId ?? 'unassigned'): {previous.wire: dec}},
+        'byServant': {servantKey: {previous.wire: dec}},
       },
       SetOptions(merge: true),
     );
@@ -134,7 +225,7 @@ class AttendanceRepository {
     try {
       var q = _col.where('womanId', isEqualTo: womanId);
         final snap =
-          await q.orderBy('meetingId', descending: true).limit(limit).get();
+          await AppFailure.guard(q.orderBy('meetingId', descending: true).limit(limit).get());
       return snap.docs
           .map((d) => AttendanceRecord.fromMap(d.data()))
           .whereType<AttendanceRecord>()
@@ -164,10 +255,10 @@ class AttendanceRepository {
       if (toId != null) {
         q = q.where(FieldPath.documentId, isLessThanOrEqualTo: toId);
       }
-      final snap = await q
+      final snap = await AppFailure.guard(q
           .orderBy(FieldPath.documentId, descending: true)
           .limit(limit)
-          .get();
+          .get());
       return snap.docs
           .map((d) => MeetingSummary.fromMap(d.id, d.data()))
           .toList();
@@ -183,7 +274,7 @@ class AttendanceRepository {
       var q = _col
           .where('meetingId', isGreaterThanOrEqualTo: fromId)
           .where('meetingId', isLessThanOrEqualTo: toId);
-        final snap = await q.get();
+        final snap = await AppFailure.guard(q.get());
       return snap.docs
           .map((d) => AttendanceRecord.fromMap(d.data()))
           .whereType<AttendanceRecord>()

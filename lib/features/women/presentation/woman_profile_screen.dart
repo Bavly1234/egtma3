@@ -14,7 +14,6 @@ import '../../auth/domain/app_user.dart';
 import '../../auth/domain/permissions.dart';
 import '../../followups/presentation/record_follow_up_sheet.dart';
 import '../../followups/presentation/suggestion_card.dart';
-import '../../users/presentation/servant_picker.dart';
 import '../data/women_repository.dart';
 import '../domain/woman.dart';
 import 'woman_providers.dart';
@@ -31,8 +30,9 @@ class WomanProfileScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('بيانات السيدة'),
         actions: [
+          // Full women CRUD for every active servant (not father-only).
           if (woman.value != null && Permissions.canManageWomen(user))
-            _FatherMenu(woman: woman.value!, user: user),
+            _WomanMenu(woman: woman.value!, user: user),
         ],
       ),
       body: AsyncBody(
@@ -54,7 +54,7 @@ class _ProfileBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final w = woman;
-    final canAct = Permissions.canActOnWoman(user, w.assignedServantId);
+    final canAct = Permissions.canActOnWoman(user);
     final now = DateTime.now();
     return ListView(padding: const EdgeInsets.all(16), children: [
       Text(w.fullName, style: Theme.of(context).textTheme.headlineMedium),
@@ -110,10 +110,6 @@ class _ProfileBody extends ConsumerWidget {
                   ? ''
                   : '${Dates.display(w.dateOfBirth)}  (${Dates.ageOn(w.dateOfBirth!, now)} سنة)',
             ),
-            InfoRow(
-                icon: Icons.badge,
-                label: 'الخادمة',
-                value: w.assignedServantName ?? 'غير معينة'),
             if (w.notes.isNotEmpty)
               InfoRow(icon: Icons.notes, label: 'ملاحظات', value: w.notes),
           ]),
@@ -204,8 +200,10 @@ class _AttendanceSection extends ConsumerWidget {
   }
 }
 
-class _FatherMenu extends ConsumerWidget {
-  const _FatherMenu({required this.woman, required this.user});
+/// Edit / activate / delete — every active servant (full women CRUD).
+/// Assignment is by street only (managed from the Streets screen).
+class _WomanMenu extends ConsumerWidget {
+  const _WomanMenu({required this.woman, required this.user});
   final Woman woman;
   final AppUser user;
 
@@ -219,16 +217,6 @@ class _FatherMenu extends ConsumerWidget {
         switch (v) {
           case 'edit':
             context.push(Routes.womanEdit(woman.id));
-          case 'assign':
-            final servant = await pickServant(context, ref,
-                allowNone: true, title: 'تعيين خادمة');
-            if (servant == null || !context.mounted) return;
-            await runGuarded(
-              context,
-              () => repo.assign(
-                  [woman.id], servant.value, user),
-              successMessage: 'تم التعيين',
-            );
           case 'toggle':
             final ok = await confirmAction(context,
                 title: woman.active ? 'إيقاف السيدة' : 'تفعيل السيدة',
@@ -257,7 +245,6 @@ class _FatherMenu extends ConsumerWidget {
       },
       itemBuilder: (_) => [
         const PopupMenuItem(value: 'edit', child: Text('تعديل البيانات')),
-        const PopupMenuItem(value: 'assign', child: Text('تعيين خادمة')),
         PopupMenuItem(
             value: 'toggle',
             child: Text(woman.active ? 'إيقاف (غير نشطة)' : 'تفعيل')),

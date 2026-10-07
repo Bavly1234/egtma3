@@ -17,8 +17,6 @@ class Woman {
     required this.phone,
     required this.dateOfBirth,
     required this.active,
-    this.assignedServantId,
-    this.assignedServantName,
     this.notes = '',
     this.consecutiveAbsences = 0,
     this.totalPresent = 0,
@@ -42,8 +40,6 @@ class Woman {
   final String phone; // normalised
   final DateTime? dateOfBirth;
   final bool active;
-  final String? assignedServantId;
-  final String? assignedServantName;
   final String notes;
 
   // Server-maintained summary (Cloud Functions only).
@@ -78,8 +74,6 @@ class Woman {
         phone: (m['phone'] as String?) ?? '',
         dateOfBirth: tsToDate(m['dateOfBirth']),
         active: (m['active'] as bool?) ?? true,
-        assignedServantId: m['assignedServantId'] as String?,
-        assignedServantName: m['assignedServantName'] as String?,
         notes: (m['notes'] as String?) ?? '',
         consecutiveAbsences: (m['consecutiveAbsences'] as num?)?.toInt() ?? 0,
         totalPresent: (m['totalPresent'] as num?)?.toInt() ?? 0,
@@ -104,11 +98,9 @@ class WomanDraft {
     required this.streetName,
     required this.address,
     required this.phone,
-    required this.dateOfBirth,
+    required     this.dateOfBirth,
     this.active = true,
     this.notes = '',
-    this.assignedServantId,
-    this.assignedServantName,
   });
 
   final String fullName;
@@ -118,8 +110,6 @@ class WomanDraft {
   final DateTime? dateOfBirth;
   final bool active;
   final String notes;
-  final String? assignedServantId;
-  final String? assignedServantName;
 
   /// Firestore fields derived from the draft. `streetId` is supplied by the
   /// street repository so street names stay consistent.
@@ -139,8 +129,6 @@ class WomanDraft {
       'birthDay': dob?.day,
       'active': active,
       'notes': notes.trim(),
-      'assignedServantId': assignedServantId,
-      'assignedServantName': assignedServantName,
     };
   }
 }

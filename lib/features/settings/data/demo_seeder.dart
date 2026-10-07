@@ -55,8 +55,6 @@ class DemoSeeder {
           address: '${10 + i} $street',
           phone: '01000000${100 + i}',
           dateOfBirth: dob,
-          assignedServantId: father.id,
-          assignedServantName: father.name,
         );
         final ref = _db.collection(FsPaths.women).doc();
         final streetId = Street.idFor(street);
@@ -82,8 +80,6 @@ class DemoSeeder {
           phone: draft.phone,
           dateOfBirth: dob,
           active: true,
-          assignedServantId: father.id,
-          assignedServantName: father.name,
           isDemo: true,
         ));
       }
@@ -137,6 +133,7 @@ class DemoSeeder {
   Future<String> remove() async {
     try {
       var removed = 0;
+      final errors = <String>[];
       Future<void> deleteDocs(List<DocumentReference> refs) async {
         for (var i = 0; i < refs.length; i += 400) {
           final b = _db.batch();
@@ -148,35 +145,69 @@ class DemoSeeder {
         removed += refs.length;
       }
 
+      // Each collection is cleaned independently so one denied/failed query
+      // (e.g. notifications, which only the recipient may read) never aborts
+      // the whole removal — the father can always delete the test data.
+      Future<void> cleanQuery(
+        String col,
+        String field,
+        List<String> values, {
+        String label = '',
+      }) async {
+        if (values.isEmpty) return;
+        try {
+          for (var i = 0; i < values.length; i += 30) {
+            final chunk = values.sublist(i, (i + 30).clamp(0, values.length));
+            if (chunk.isEmpty) continue;
+            final snap =
+                await _db.collection(col).where(field, whereIn: chunk).get();
+            await deleteDocs(snap.docs.map((d) => d.reference).toList());
+          }
+        } catch (e) {
+          errors.add(label.isEmpty ? col : label);
+        }
+      }
+
       final demoWomen =
           await _db.collection(FsPaths.women).where('isDemo', isEqualTo: true).get();
       final ids = demoWomen.docs.map((d) => d.id).toList();
-      for (var i = 0; i < ids.length; i += 30) {
-        final chunk = ids.sublist(i, (i + 30).clamp(0, ids.length));
-        for (final (col, field) in [
-          (FsPaths.suggestions, 'womanId'),
-          (FsPaths.followUps, 'womanId'),
-          (FsPaths.attendance, 'womanId'),
-          (FsPaths.conferenceAttendance, 'womanId'),
-          (FsPaths.notifications, 'relatedEntityId'),
-        ]) {
-          final snap = await _db.collection(col).where(field, whereIn: chunk).get();
-          await deleteDocs(snap.docs.map((d) => d.reference).toList());
-        }
+      for (final (col, field) in [
+        (FsPaths.suggestions, 'womanId'),
+        (FsPaths.followUps, 'womanId'),
+        (FsPaths.attendance, 'womanId'),
+        (FsPaths.conferenceAttendance, 'womanId'),
+        (FsPaths.meetingAssignments, 'womanId'),
+        (FsPaths.conferenceAssignments, 'womanId'),
+        // Notifications can only be read by their own recipient, so a
+        // collection-wide clean-up by the father is best-effort only.
+        (FsPaths.notifications, 'relatedEntityId'),
+      ]) {
+        await cleanQuery(col, field, ids);
       }
       for (final col in [FsPaths.women, FsPaths.conferences, FsPaths.streets]) {
-        final snap = await _db.collection(col).where('isDemo', isEqualTo: true).get();
-        await deleteDocs(snap.docs.map((d) => d.reference).toList());
+        try {
+          final snap = await _db.collection(col).where('isDemo', isEqualTo: true).get();
+          await deleteDocs(snap.docs.map((d) => d.reference).toList());
+        } catch (e) {
+          errors.add(col);
+        }
       }
       // Meeting counters that only contained demo marks.
-      final meetings = await _db.collection(FsPaths.meetings).get();
-      for (final m in meetings.docs) {
-        final left = await _db
-            .collection(FsPaths.attendance)
-            .where('meetingId', isEqualTo: m.id)
-            .limit(1)
-            .get();
-        if (left.docs.isEmpty) await deleteDocs([m.reference]);
+      try {
+        final meetings = await _db.collection(FsPaths.meetings).get();
+        for (final m in meetings.docs) {
+          final left = await _db
+              .collection(FsPaths.attendance)
+              .where('meetingId', isEqualTo: m.id)
+              .limit(1)
+              .get();
+          if (left.docs.isEmpty) await deleteDocs([m.reference]);
+        }
+      } catch (e) {
+        errors.add(FsPaths.meetings);
+      }
+      if (errors.isNotEmpty) {
+        return 'تم حذف $removed سجل تجريبي. (تعذر إكمال: ${errors.toSet().join('، ')})';
       }
       return 'تم حذف $removed سجل تجريبي.';
     } catch (e, st) {

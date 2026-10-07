@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../attendance/domain/absence_rules.dart';
@@ -52,9 +53,11 @@ class AbsenceProcessor {
             type: SuggestionType.fromWire(d.get('type') as String?) ?? SuggestionType.phone,
             status: SuggestionStatus.fromWire(d.get('status') as String?),
             streakStartMeetingId: d.data()['streakStartMeetingId'] as String?,
+            createdAt: tsToDate(d.data()['createdAt']),
           ),
       ];
-      final decision = AbsenceRules.decide(streak, existing);
+      final decision = AbsenceRules.decide(streak, existing,
+          marks: marks, now: DateTime.now());
 
       // 3. Apply atomically.
       final batch = _db.batch();
@@ -68,27 +71,45 @@ class AbsenceProcessor {
       }
       String? createdId;
       final create = decision.create;
-      if (create != null && streak.startMeetingId != null) {
-        createdId = suggestionId(woman.id, create, streak.startMeetingId!);
-        batch.set(_db.collection(FsPaths.suggestions).doc(createdId), {
-          'womanId': woman.id,
-          'womanName': woman.fullName,
-          'type': create.wire,
-          'status': SuggestionStatus.pending.wire,
-          'consecutiveAbsences': streak.count,
-          'streakStartMeetingId': streak.startMeetingId,
-          'reason': reasonFor(create, streak.count),
-          'assignedServantId': woman.assignedServantId,
-          'assignedServantName': woman.assignedServantName,
-          'streetId': woman.streetId,
-          'streetName': woman.streetName,
-          'phone': woman.phone,
-          'address': woman.address,
-          'isDemo': woman.isDemo,
-          'createdBy': actor.id,
-          'createdAt': now,
-          'updatedAt': now,
-        });
+      if (create != null) {
+        final startId = decision.streakStartMeetingId ?? streak.startMeetingId;
+        if (startId == null) {
+          AppLog.w('Suggestion without streak start skipped');
+        } else {
+          createdId = suggestionId(woman.id, create, startId);
+          // The ONLY assignment: the servant responsible for the woman's street.
+          String? streetServantId;
+          String? streetServantName;
+          try {
+            final streetDoc = await _db
+                .collection(FsPaths.streets)
+                .doc(woman.streetId)
+                .get();
+            streetServantId = streetDoc.data()?['servantId'] as String?;
+            streetServantName = streetDoc.data()?['servantName'] as String?;
+          } catch (e) {
+            AppLog.w('Street servant lookup failed', e);
+          }
+          batch.set(_db.collection(FsPaths.suggestions).doc(createdId), {
+            'womanId': woman.id,
+            'womanName': woman.fullName,
+            'type': create.wire,
+            'status': SuggestionStatus.pending.wire,
+            'consecutiveAbsences': streak.count,
+            'streakStartMeetingId': startId,
+            'reason': decision.reason ?? reasonFor(create, streak.count),
+            'assignedServantId': streetServantId,
+            'assignedServantName': streetServantName,
+            'streetId': woman.streetId,
+            'streetName': woman.streetName,
+            'phone': woman.phone,
+            'address': woman.address,
+            'isDemo': woman.isDemo,
+            'createdBy': actor.id,
+            'createdAt': now,
+            'updatedAt': now,
+          });
+        }
       }
 
       // Active type after this change.

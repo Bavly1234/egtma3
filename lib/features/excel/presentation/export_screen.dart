@@ -36,13 +36,13 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   bool _busy = false;
 
   static const _womenHeaders = [
-    'الاسم', 'الشارع', 'العنوان', 'التليفون', 'تاريخ الميلاد', 'الخادمة',
+    'الاسم', 'الشارع', 'العنوان', 'التليفون', 'تاريخ الميلاد',
     'نشطة', 'غياب متتالي', 'مرات الحضور', 'مرات الغياب', 'مكالمات', 'زيارات', 'ملاحظات',
   ];
 
   List<Object?> _womanRow(Woman w) => [
         w.fullName, w.streetName, w.address, w.phone, w.dateOfBirth,
-        w.assignedServantName ?? '', w.active, w.consecutiveAbsences,
+        w.active, w.consecutiveAbsences,
         w.totalPresent, w.totalAbsent, w.phoneCalls, w.homeVisits, w.notes,
       ];
 

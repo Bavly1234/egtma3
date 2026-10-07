@@ -32,15 +32,17 @@ class MoreScreen extends ConsumerWidget {
         MenuTile(icon: Icons.history, title: 'سجل الاجتماعات',
             onTap: () => go(Routes.attendanceHistory)),
         MenuTile(icon: Icons.insights,
-            title: user.isFather ? 'إحصائيات الخادمات' : 'إحصائياتي',
+            title: 'إحصائيات الخادمات',
             onTap: () => go(Routes.statsServants)),
+        MenuTile(icon: Icons.calendar_month, title: 'التقرير الشهري',
+            subtitle: 'تقرير كامل لكل شهر',
+            color: AppColors.present,
+            onTap: () => go(Routes.monthlyReport)),
         if (Permissions.canManageStreets(user))
           MenuTile(icon: Icons.signpost, title: 'الشوارع', onTap: () => go(Routes.streets)),
         if (Permissions.canManageUsers(user)) ...[
           MenuTile(icon: Icons.manage_accounts, title: 'المستخدمون (الخادمات)',
               onTap: () => go(Routes.users)),
-          MenuTile(icon: Icons.assignment_ind, title: 'تعيين السيدات للخادمات',
-              onTap: () => go(Routes.assign)),
         ],
         if (Permissions.canImportExport(user)) ...[
           MenuTile(icon: Icons.upload_file, title: 'استيراد من Excel',

@@ -6,8 +6,12 @@ rules_version = '2';
 // counters, notifications), so these rules allow exactly those writes and
 // nothing more:
 //  * roles live in users/{uid}.role and only the father can change them;
-//  * every active servant can see and work on all women (assignment is only
-//    a label / filter); managing women, users and settings is father-only;
+//  * every active servant has full women CRUD (create / update / delete /
+//    activate) — not father-only; there is NO per-meeting / per-conference /
+//    per-افتقاد assignment — the ONLY assignment is street.servantId
+//    (managed on the Streets screen): every woman belongs to her street's
+//    servant; servants may also create conferences and import/export;
+//    managing users, streets (screen) and settings stays father-only;
 //  * history (follow_ups, audit_logs) is append-only;
 //  * notifications can be created once but never overwritten (de-duplication).
 //
@@ -54,29 +58,45 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ---------- women ----------
-    // Summary fields maintained by the app's follow-up engine.
+    // ---------- women: full CRUD for every active servant ----------
+    // No global assignment: assignment lives per-context (meeting_assignments,
+    // conference_assignments, suggestion.assignedServantId).
     function summaryFields() {
       return ['consecutiveAbsences', 'totalPresent', 'totalAbsent', 'lastAttendanceDate',
               'activeSuggestionType', 'phoneCalls', 'homeVisits', 'lastCallAt', 'lastVisitAt',
               'notes', 'updatedAt'];
     }
+    // Full create/update form fields (servants and father alike).
+    function womanFormValid() {
+      return str(request.resource.data.fullName, 200)
+        && request.resource.data.fullName.size() >= 3
+        && str(request.resource.data.phone, 20)
+        && request.resource.data.active is bool
+        && (!('notes' in request.resource.data) || str(request.resource.data.notes, 2000));
+    }
     match /women/{id} {
       allow read: if isActive();
-      allow create: if isFather()
-        && str(request.resource.data.fullName, 200) && request.resource.data.fullName.size() >= 3
-        && str(request.resource.data.phone, 20)
-        && request.resource.data.active is bool;
-      allow update: if (isFather() && request.resource.data.fullName.size() >= 3)
-        || (isServant()
-          && onlyChanges(summaryFields())
-          && (!('notes' in request.resource.data) || str(request.resource.data.notes, 2000)));
-      allow delete: if isFather();
+      allow create: if isActive() && womanFormValid();
+      // request.resource.data is the future full document, so the form check
+      // passes for partial updates too (activate, counters, notes).
+      allow update: if isActive() && (
+        womanFormValid()
+        || onlyChanges(['active', 'updatedAt'])
+        || (isServant() && onlyChanges(summaryFields()))
+      );
+      allow delete: if isActive();
     }
 
     match /streets/{id} {
       allow read: if isActive();
-      allow create, update: if isFather() && str(request.resource.data.name, 120);
+      // Servants create/update streets implicitly when adding or editing a
+      // woman (street upsert); the Streets management screen stays
+      // father-only in the app. Deleting a street stays father-only.
+      // Assigning a servant to a street (the only assignment) is father-only.
+      allow create: if isActive() && str(request.resource.data.name, 120)
+        && (isFather() || !request.resource.data.keys().hasAny(['servantId', 'servantName']));
+      allow update: if isActive() && str(request.resource.data.name, 120)
+        && (isFather() || !changes().hasAny(['servantId', 'servantName']));
       allow delete: if isFather();
     }
 
@@ -89,16 +109,18 @@ service cloud.firestore {
         && isStatus(request.resource.data.status)
         && request.resource.data.markedBy == request.auth.uid
         && staffFor(request.resource.data.womanId);
-      // Reassigning a woman moves her history to the new servant.
+      // The per-meeting servant is recorded at mark time (no global assignment).
       allow update: if isFather() && onlyChanges(['servantId']);
       allow delete: if isActive();
     }
 
     // Dashboard counters, incremented by the app together with each mark.
+    // autoAbsentDone flags that unmarked women were auto-marked absent
+    // (Wednesday 9pm cutoff).
     match /meetings/{id} {
       allow read: if isActive();
       allow write: if isActive() && id.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && request.resource.data.keys().hasOnly(['present', 'absent', 'byStreet', 'byServant', 'updatedAt']);
+        && request.resource.data.keys().hasOnly(['present', 'absent', 'byStreet', 'byServant', 'updatedAt', 'autoAbsentDone']);
       allow delete: if isFather();
     }
 
@@ -116,24 +138,31 @@ service cloud.firestore {
 
     // Suggestions are created by the app's rules engine with deterministic
     // ids ({womanId}_{type}_{streakStart}); staff may then change status.
+    // The assignee always mirrors the woman's street servant (the ONLY
+    // assignment); only the father may move a task to another servant.
+    function suggStatusOk() {
+      return request.resource.data.status in ['pending', 'assigned', 'in_progress', 'completed', 'dismissed', 'cancelled'];
+    }
+    function suggProgressFields() {
+      return ['status', 'updatedAt', 'completedAt', 'completedBy', 'followUpId', 'cancelReason'];
+    }
     match /follow_up_suggestions/{id} {
       allow read: if isActive();
       allow create: if staffFor(request.resource.data.womanId)
         && id == request.resource.data.womanId + '_' + request.resource.data.type + '_' + request.resource.data.streakStartMeetingId
         && request.resource.data.type in ['phone', 'home_visit']
         && request.resource.data.status == 'pending';
-      allow update: if (isFather()
-          || (isServant()
-            && onlyChanges(['status', 'updatedAt', 'completedAt', 'completedBy', 'followUpId', 'cancelReason'])
-            && request.resource.data.status != 'dismissed'))
-        && request.resource.data.status in ['pending', 'assigned', 'in_progress', 'completed', 'dismissed', 'cancelled'];
+      allow update: if (isFather() && suggStatusOk())
+        || (isServant() && suggStatusOk()
+          && request.resource.data.status != 'dismissed'
+          && onlyChanges(suggProgressFields()));
       allow delete: if isFather();
     }
 
-    // ---------- conferences (separate from Wednesday attendance) ----------
+    // ---------- conferences (servants may create; delete stays father-only) ----------
     match /conferences/{id} {
       allow read: if isActive();
-      allow create, update: if isFather() && str(request.resource.data.name, 200)
+      allow create, update: if isActive() && str(request.resource.data.name, 200)
         && request.resource.data.days is list && request.resource.data.days.size() == 3;
       allow delete: if isFather();
     }

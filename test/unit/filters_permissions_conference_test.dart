@@ -67,15 +67,34 @@ void main() {
   });
 
   group('role permissions', () {
-    test('father manages, servants act on all women', () {
+    test('servants have full women CRUD — not father-only', () {
       expect(Permissions.canManageWomen(father), isTrue);
-      expect(Permissions.canManageWomen(servant), isFalse);
-      expect(Permissions.canImportExport(servant), isFalse);
-      expect(Permissions.canActOnWoman(servant, 's'), isTrue);
-      // Assignment is optional: every active servant can act on every woman.
-      expect(Permissions.canActOnWoman(servant, 'other'), isTrue);
-      expect(Permissions.canActOnWoman(servant, null), isTrue);
-      expect(Permissions.canActOnWoman(father, 'other'), isTrue);
+      expect(Permissions.canManageWomen(servant), isTrue);
+      expect(Permissions.canManageWomen(disabled), isFalse);
+      expect(Permissions.canImportExport(servant), isTrue);
+      expect(Permissions.canImportExport(disabled), isFalse);
+      // No global assignment: every active servant acts on every woman.
+      expect(Permissions.canActOnWoman(servant), isTrue);
+      expect(Permissions.canActOnWoman(father), isTrue);
+      expect(Permissions.canActOnWoman(disabled), isFalse);
+      expect(Routes.fatherOnly, isNot(contains(Routes.womanNew)));
+    });
+
+    test('street is the only assignment; servants see everything', () {
+      expect(Routes.fatherOnly, contains(Routes.streets));
+      expect(Routes.fatherOnly, contains(Routes.stats));
+      // Open to every active servant.
+      for (final r in [
+        Routes.womanNew,
+        Routes.conferenceNew,
+        Routes.statsServants,
+        Routes.statsWomen,
+        Routes.monthlyReport,
+        Routes.import,
+        Routes.export,
+      ]) {
+        expect(Routes.fatherOnly, isNot(contains(r)));
+      }
     });
 
     test('disabled accounts have no permissions', () {
@@ -87,10 +106,15 @@ void main() {
       String? go(String loc, AppUser? u) => authRedirect(
           location: loc, authLoading: false, signedIn: true, profileLoading: false, user: u);
       expect(go(Routes.users, servant), Routes.home);
-      expect(go(Routes.import, servant), Routes.home);
-      expect(go(Routes.womanEdit('x'), servant), Routes.home);
+      // Women CRUD, conferences, stats and import/export are open to servants.
+      expect(go(Routes.womanNew, servant), isNull);
+      expect(go(Routes.womanEdit('x'), servant), isNull);
       expect(go(Routes.statsServants, servant), isNull);
       expect(go(Routes.users, father), isNull);
+      // Conferences + stats + import/export are open to servants.
+      expect(go(Routes.conferenceNew, servant), isNull);
+      expect(go(Routes.statsServants, servant), isNull);
+      expect(go(Routes.import, servant), isNull);
       expect(go(Routes.home, disabled), Routes.blocked);
       expect(authRedirect(location: Routes.home, authLoading: false, signedIn: false,
           profileLoading: false, user: null), Routes.login);

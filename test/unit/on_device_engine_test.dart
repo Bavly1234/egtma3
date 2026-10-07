@@ -25,8 +25,6 @@ Woman woman(String id, {DateTime? dob}) => Woman(
       phone: '01012345678',
       dateOfBirth: dob,
       active: true,
-      assignedServantId: 's1',
-      assignedServantName: 'خادمة',
     );
 
 void main() {
@@ -43,6 +41,10 @@ void main() {
       processor = AbsenceProcessor(db, NotificationWriter(db));
       await db.collection(FsPaths.women).doc(w.id).set({'fullName': w.fullName});
       await db.collection(FsPaths.settings).doc(FsPaths.settingsAppDoc).set({'fatherIds': ['f']});
+      // Servant accounts so suggestion notifications reach every servant.
+      await db.collection(FsPaths.users).doc('s1').set({'active': true, 'role': 'servant'});
+      // Street 's' is served by s1 (assignment is by street only).
+      await db.collection(FsPaths.streets).doc('s').set({'name': 'شارع', 'servantId': 's1', 'servantName': 'خادمة'});
     });
 
     Future<void> mark(int week, AttendanceStatus s) async {
@@ -92,7 +94,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect((await suggestions()).length, 1);
       final notes = await db.collection(FsPaths.notifications).get();
-      // One for the servant (phone suggestions don't notify the father).
+      // Every servant is notified of every افتقاد (no global assignment).
       expect(notes.docs.where((d) => d.get('recipientId') == 's1').length, 1);
     });
 

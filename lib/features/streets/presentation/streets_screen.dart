@@ -13,7 +13,6 @@ import '../../auth/data/auth_repository.dart';
 import '../../statistics/data/stats_repository.dart';
 import '../../statistics/domain/stats_models.dart';
 import '../../users/presentation/servant_picker.dart';
-import '../../women/data/women_repository.dart';
 import '../../women/domain/women_filter.dart';
 import '../../women/presentation/women_list_controller.dart';
 import '../data/street_repository.dart';
@@ -62,22 +61,28 @@ class _StreetsScreenState extends ConsumerState<StreetsScreen> {
   }
 
   Future<void> _assign(StreetStats s) async {
-    final choice = await pickServant(context, ref, title: 'تعيين كل سيدات ${s.name}');
-    if (choice?.value == null || !mounted) return;
-    final ok = await confirmAction(context,
-        title: 'تعيين بالشارع',
-        message: 'سيتم تعيين كل سيدات "${s.name}" للخادمة ${choice!.value!.name}.');
-    if (!ok || !mounted) return;
-    await runGuarded(context, () async {
-      final n = await ref.read(womenRepositoryProvider).assignByStreet(
-          s.streetId, choice.value!, ref.read(requireUserProvider));
-      if (mounted) AppToast.success(context, 'تم تعيين $n سيدة');
-    });
+    final streets = ref.read(streetMapProvider);
+    final current = streets[s.streetId];
+    final choice = await pickServant(context, ref,
+        allowNone: true,
+        title: 'الخادمة المسؤولة عن ${s.name}'
+        '${current?.servantName == null ? '' : ' (الحالية: ${current!.servantName})'}');
+    if (choice == null || !mounted) return;
+    await runGuarded(
+      context,
+      () => ref.read(streetRepositoryProvider).setServant(
+          s.streetId, choice.value, ref.read(requireUserProvider)),
+      successMessage: choice.value == null
+          ? 'تم إلغاء مسؤولة الشارع'
+          : 'أصبحت ${choice.value!.name} مسؤولة عن ${s.name}',
+    );
+    ref.invalidate(_streetStatsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final stats = ref.watch(_streetStatsProvider);
+    final streetMap = ref.watch(streetMapProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('الشوارع')),
       floatingActionButton: FloatingActionButton.extended(
@@ -121,6 +126,7 @@ class _StreetsScreenState extends ConsumerState<StreetsScreen> {
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => _StreetCard(
                   s: rows[i],
+                  servantName: streetMap[rows[i].streetId]?.servantName,
                   onOpen: () {
                     ref.read(womenFilterProvider.notifier)
                         .set(WomenFilter(streetId: rows[i].streetId));
@@ -141,11 +147,13 @@ class _StreetsScreenState extends ConsumerState<StreetsScreen> {
 class _StreetCard extends StatelessWidget {
   const _StreetCard({
     required this.s,
+    required this.servantName,
     required this.onOpen,
     required this.onRename,
     required this.onAssign,
   });
   final StreetStats s;
+  final String? servantName;
   final VoidCallback onOpen;
   final VoidCallback onRename;
   final VoidCallback onAssign;
@@ -169,10 +177,18 @@ class _StreetCard extends StatelessWidget {
                   onSelected: (v) => v == 0 ? onRename() : onAssign(),
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 0, child: Text('تعديل الاسم')),
-                    PopupMenuItem(value: 1, child: Text('تعيين خادمة لكل الشارع')),
+                    PopupMenuItem(value: 1, child: Text('تعيين خادمة مسؤولة')),
                   ],
                 ),
               ]),
+              const SizedBox(height: 4),
+              Text('الخادمة المسؤولة: ${servantName ?? 'غير معينة'}',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: servantName == null
+                          ? AppColors.absent
+                          : AppColors.primary)),
               const SizedBox(height: 8),
               Wrap(spacing: 16, runSpacing: 6, children: [
                 Text('السيدات: ${s.women}', style: const TextStyle(fontSize: 17)),

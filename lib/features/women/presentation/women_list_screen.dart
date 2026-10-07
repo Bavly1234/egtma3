@@ -112,19 +112,6 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
             ),
           ]),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: FilterChip(
-              avatar: const Icon(Icons.badge, size: 20),
-              label: const Text('المعيّنات لي فقط'),
-              selected: filter.servantId == user.id,
-              onSelected: (on) => ref.read(womenFilterProvider.notifier).set(
-                  filter.copyWith(servantId: () => on ? user.id : null)),
-            ),
-          ),
-        ),
         if (!filter.isEmpty)
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -147,9 +134,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
                   icon: Icons.group_off,
                   title: filter.isEmpty ? 'لا توجد سيدات بعد' : 'لا توجد نتائج',
                   message: filter.isEmpty
-                      ? (canManage
-                          ? 'أضيفي سيدة جديدة أو استوردي ملف Excel.'
-                          : 'لم يضف الأب الكاهن أي سيدات بعد.')
+                      ? 'أضيفي سيدة جديدة.'
                       : 'جربي تغيير البحث أو الفلاتر.',
                 );
               }
@@ -183,7 +168,6 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
                     final w = s.items[i];
                     return WomanTile(
                       woman: w,
-                      highlightServantId: user.id,
                       onTap: () => context.push(Routes.woman(w.id)),
                     );
                   },

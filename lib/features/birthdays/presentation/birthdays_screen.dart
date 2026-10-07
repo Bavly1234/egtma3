@@ -56,12 +56,12 @@ class BirthdaysScreen extends ConsumerWidget {
             if (today.isEmpty)
               const Text('لا توجد أعياد ميلاد اليوم', style: TextStyle(fontSize: 18))
             else
-              for (final w in today) _BirthdayCard(w: w, showServant: true, today: true),
+              for (final w in today) _BirthdayCard(w: w, today: true),
             const SectionTitle('أعياد الميلاد القادمة (30 يوم)'),
             if (upcoming.isEmpty)
               const Text('لا يوجد', style: TextStyle(fontSize: 18))
             else
-              for (final w in upcoming) _BirthdayCard(w: w, showServant: true),
+              for (final w in upcoming) _BirthdayCard(w: w),
           ]);
         },
       ),
@@ -70,9 +70,8 @@ class BirthdaysScreen extends ConsumerWidget {
 }
 
 class _BirthdayCard extends StatelessWidget {
-  const _BirthdayCard({required this.w, required this.showServant, this.today = false});
+  const _BirthdayCard({required this.w, this.today = false});
   final Woman w;
-  final bool showServant;
   final bool today;
 
   @override
@@ -101,9 +100,6 @@ class _BirthdayCard extends StatelessWidget {
             ),
             Text('تاريخ الميلاد: ${Dates.display(w.dateOfBirth)}  •  ${w.streetName}',
                 style: const TextStyle(fontSize: 16, color: AppColors.textMuted)),
-            if (showServant)
-              Text('الخادمة: ${w.assignedServantName ?? 'غير معينة'}',
-                  style: const TextStyle(fontSize: 16, color: AppColors.textMuted)),
             if (w.hasPhone) ...[
               const SizedBox(height: 10),
               ContactButtons(phone: w.phone, whatsApp: w.hasWhatsApp),

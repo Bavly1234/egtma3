@@ -7,13 +7,19 @@ import '../../women/domain/woman_validator.dart';
 enum ImportField { name, street, address, phone, dateOfBirth }
 
 /// Header aliases (English + Arabic). Compared after Arabic normalisation.
+/// Matches the official template exactly:
+/// A الاسم كامل | B رقم التليفون | C الشارع | D العنوان بالكامل | E تاريخ الميلاد
 const Map<ImportField, List<String>> kImportAliases = {
-  ImportField.name: ['name', 'full name', 'الاسم', 'اسم', 'الاسم بالكامل'],
+  ImportField.name: [
+    'name', 'full name', 'الاسم', 'اسم', 'الاسم بالكامل', 'الاسم كامل', 'اسم كامل'
+  ],
   ImportField.street: ['street', 'street name', 'الشارع', 'شارع', 'اسم الشارع'],
-  ImportField.address: ['address', 'full address', 'العنوان', 'عنوان'],
+  ImportField.address: [
+    'address', 'full address', 'العنوان', 'عنوان', 'العنوان بالكامل', 'عنوان بالكامل'
+  ],
   ImportField.phone: [
     'phone', 'phone number', 'mobile', 'التليفون', 'التلفون', 'الهاتف',
-    'الموبايل', 'رقم التليفون', 'رقم الهاتف', 'تليفون'
+    'الموبايل', 'رقم التليفون', 'رقم الهاتف', 'تليفون', 'رقم التلفون'
   ],
   ImportField.dateOfBirth: [
     'date of birth', 'dob', 'birth date', 'birthdate', 'تاريخ الميلاد',

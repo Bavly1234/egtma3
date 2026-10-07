@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/routes.dart';
 import '../../../core/services/local_notifications.dart';
+import '../../attendance/data/auto_absence_service.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../notifications/data/reminder_service.dart';
 
@@ -66,6 +67,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final user = ref.read(currentUserProvider).value;
     if (state == AppLifecycleState.resumed && user != null) {
       ref.read(reminderServiceProvider).refresh(user);
+      ref.read(autoAbsenceServiceProvider).runIfDue(user);
     }
   }
 
@@ -100,6 +102,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (user != null && _startedFor != user.id) {
       _startedFor = user.id;
       ref.read(reminderServiceProvider).start(user);
+      // Wednesday 9pm: mark everyone not marked present as absent.
+      ref.read(autoAbsenceServiceProvider).runIfDue(user);
     }
     final tabs = (user?.isFather ?? false) ? _fatherTabs : _servantTabs;
     final current =

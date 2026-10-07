@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
@@ -13,7 +14,7 @@ import '../domain/conference_stats.dart';
 
 final _statsProvider = FutureProvider.autoDispose
     .family<(Conference, ConferenceStats)?, String>((ref, id) async {
-  final conf = await ref.watch(conferenceProvider(id).future);
+  final conf = await AppFailure.guard(ref.watch(conferenceProvider(id).future));
   if (conf == null) return null;
   final records = await ref
       .watch(conferenceRepositoryProvider)

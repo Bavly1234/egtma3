@@ -57,7 +57,7 @@ final _womenStatsProvider = FutureProvider.autoDispose<_WomenStats>((ref) async 
     total: r[0] as int,
     active: r[1] as int,
     meetings: r[2] as List<MeetingSummary>,
-    mostRegular: r[3] as List<Woman>,
+    mostRegular: (r[3] as List<Woman>).where((w) => w.totalPresent > 0).toList(),
     mostAbsent: (r[4] as List<Woman>).where((w) => w.consecutiveAbsences > 0).toList(),
   );
 });

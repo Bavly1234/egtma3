@@ -6,8 +6,6 @@ import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../auth/data/auth_repository.dart';
-import '../../auth/domain/app_user.dart';
-import '../../users/presentation/servant_picker.dart';
 import '../../women/presentation/women_list_controller.dart';
 import '../data/excel_import_service.dart';
 import 'import_preview.dart';
@@ -25,7 +23,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   String? _fileName;
   bool _busy = false;
   String? _progress;
-  AppUser? _assignTo;
 
   Future<void> _pick() async {
     final file = await FilePicker.pickFile(
@@ -62,7 +59,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       final n = await ref.read(excelImportServiceProvider).commit(
             p,
             ref.read(requireUserProvider),
-            assignTo: _assignTo,
             onProgress: (d, t) => mounted ? setState(() => _progress = '$d / $t') : null,
           );
       ref.invalidate(womenListProvider);
@@ -90,9 +86,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           child: const Padding(
             padding: EdgeInsets.all(16),
             child: Text(
-              'الأعمدة المطلوبة في الصف الأول:\n'
-              'الاسم (name) — الشارع (street) — العنوان (address) — '
-              'التليفون (phone) — تاريخ الميلاد (date of birth)\n\n'
+              'الأعمدة المطلوبة بالترتيب (الصف الأول):\n'
+              'A: الاسم كامل — B: رقم التليفون — C: الشارع — '
+              'D: العنوان بالكامل — E: تاريخ الميلاد\n\n'
               'لن يتم استيراد أي سيدة مكررة أو بيانات غير صحيحة، '
               'وستظهر لك معاينة قبل الحفظ.',
               style: TextStyle(fontSize: 17),
@@ -116,18 +112,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           Text('الملف: $_fileName', style: const TextStyle(fontSize: 17)),
           const SizedBox(height: 8),
           ImportPreviewView(preview: p),
-          const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.badge, size: 30),
-              title: const Text('تعيين السيدات الجديدات لخادمة (اختياري)'),
-              subtitle: Text(_assignTo?.name ?? 'بدون تعيين'),
-              onTap: () async {
-                final c = await pickServant(context, ref, allowNone: true);
-                if (c != null) setState(() => _assignTo = c.value);
-              },
-            ),
-          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: p.valid.isEmpty ? null : _commit,

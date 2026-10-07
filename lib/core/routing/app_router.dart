@@ -27,8 +27,8 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/statistics/presentation/father_stats_screen.dart';
 import '../../features/statistics/presentation/servants_stats_screen.dart';
 import '../../features/statistics/presentation/women_stats_screen.dart';
+import '../../features/statistics/presentation/monthly_report_screen.dart';
 import '../../features/streets/presentation/streets_screen.dart';
-import '../../features/users/presentation/assign_screen.dart';
 import '../../features/users/presentation/users_screen.dart';
 import '../../features/verse/presentation/verse_screen.dart';
 import '../../features/women/presentation/woman_form_screen.dart';
@@ -127,7 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       r(Routes.import, (_) => const ImportScreen()),
       r(Routes.export, (_) => const ExportScreen()),
       r(Routes.users, (_) => const UsersScreen()),
-      r(Routes.assign, (_) => const AssignScreen()),
+      r(Routes.monthlyReport, (_) => const MonthlyReportScreen()),
       r(Routes.settings, (_) => const SettingsScreen()),
       r(Routes.audit, (_) => const AuditScreen()),
     ],

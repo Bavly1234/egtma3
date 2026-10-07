@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/enums.dart';
-import '../../../core/routing/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/states.dart';
@@ -25,12 +23,6 @@ class UsersScreen extends ConsumerWidget {
         builder: (users) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           children: [
-            OutlinedButton.icon(
-              onPressed: () => context.push(Routes.assign),
-              icon: const Icon(Icons.assignment_ind),
-              label: const Text('تعيين السيدات وتوزيع العمل'),
-            ),
-            const SizedBox(height: 12),
             const Text(
                 'الخادمات ينشئن حساباتهن بأنفسهن من شاشة الدخول باستخدام كود الانضمام. '
                 'يمكنك هنا إيقاف أي حساب أو تغيير صلاحيته.',

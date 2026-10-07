@@ -91,7 +91,6 @@ class ExcelImportService {
   Future<int> commit(
     ImportPreview preview,
     AppUser actor, {
-    AppUser? assignTo,
     void Function(int done, int total)? onProgress,
   }) async {
     final rows = preview.valid;
@@ -106,8 +105,6 @@ class ExcelImportService {
               {'womenCount': FieldValue.increment(1)}, SetOptions(merge: true));
           batch.set(_db.collection(FsPaths.women).doc(), {
             ...d.toFields(streetId),
-            'assignedServantId': assignTo?.id,
-            'assignedServantName': assignTo?.name,
             'consecutiveAbsences': 0,
             'totalPresent': 0,
             'totalAbsent': 0,

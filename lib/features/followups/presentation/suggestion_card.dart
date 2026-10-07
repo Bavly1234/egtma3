@@ -86,7 +86,8 @@ class SuggestionCard extends ConsumerWidget {
             if ((w?.streetName ?? s.streetName ?? '').isNotEmpty)
               _line(Icons.signpost, w?.streetName ?? s.streetName!),
             if (phone.isNotEmpty) _line(Icons.phone, phone),
-            _line(Icons.badge, 'الخادمة: ${s.assignedServantName ?? 'غير معينة'}'),
+            _line(Icons.badge,
+                'الخادمة المسؤولة (حسب الشارع): ${s.assignedServantName ?? 'غير معينة'}'),
             if (w != null)
               _line(
                 isHome ? Icons.home : Icons.phone_callback,

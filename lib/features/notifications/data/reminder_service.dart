@@ -65,6 +65,8 @@ class ReminderService {
       var pending = _db
           .collection(FsPaths.suggestions)
           .where('status', whereIn: SuggestionStatus.activeWires);
+      // Assignment is by street: servants are reminded of their streets'
+      // افتقاد; the father sees all.
       if (!user.isFather) {
         pending = pending.where('assignedServantId', isEqualTo: user.id);
       }
@@ -89,10 +91,23 @@ class ReminderService {
 
   Future<List<Woman>> _upcomingBirthdayWomen(AppUser user, DateTime now) async {
     final months = {for (var i = 0; i < 3; i++) DateTime(now.year, now.month + i).month};
-    // Servants are reminded of the women assigned to them; the father of all.
-    final lists = await Future.wait(months.map((m) =>
-        _women.birthdays(user, m, servantId: user.isFather ? null : user.id)));
-    return {for (final l in lists) for (final w in l) w.id: w}.values.toList();
+    // Assignment is by street: servants are reminded of their own streets'
+    // women; the father of all.
+    final lists = await Future.wait(months.map((m) => _women.birthdays(user, m)));
+    var all = {for (final l in lists) for (final w in l) w.id: w}.values.toList();
+    if (!user.isFather) {
+      try {
+        final streets = await _db.collection(FsPaths.streets).get();
+        final mine = {
+          for (final d in streets.docs)
+            if (d.data()['servantId'] == user.id) d.id,
+        };
+        all = all.where((w) => mine.contains(w.streetId)).toList();
+      } catch (e) {
+        AppLog.w('Street filter for birthdays failed', e);
+      }
+    }
+    return all;
   }
 
   /// Rule G: one in-app birthday notification per woman, recipient, year.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -50,6 +52,21 @@ class AppFailure implements Exception {
           'البيانات المدخلة غير صحيحة.',
         _ => 'حدث خطأ. حاولي مرة أخرى.',
       };
+
+  /// Guards a Firestore read so a stalled network can never spin a loading
+  /// indicator forever: after [timeout] the caller gets an [AppFailure]
+  /// (shown with a retry button) instead of hanging.
+  static Future<T> guard<T>(
+    Future<T> future, {
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    try {
+      return await future.timeout(timeout);
+    } on TimeoutException {
+      throw const AppFailure(
+          'انتهت المهلة — تحققي من الإنترنت وحاولي مجدداً.');
+    }
+  }
 }
 
 /// Maps Firestore Timestamp/DateTime safely.

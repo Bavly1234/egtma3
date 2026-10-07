@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/enums.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
-import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../data/stats_repository.dart';
@@ -15,11 +15,9 @@ import 'stats_filter_bar.dart';
 
 final _servantStatsProvider = FutureProvider.autoDispose
     .family<List<ServantStats>, StatsFilter>((ref, f) async {
-  final user = ref.watch(requireUserProvider);
   final repo = ref.watch(statsRepositoryProvider);
   final now = DateTime.now();
-  if (!user.isFather) return [await repo.servantStats(user, f, now)];
-  final users = await ref.watch(allUsersProvider.future);
+  final users = await AppFailure.guard(ref.watch(allUsersProvider.future));
   final servants = users
       .where((u) => u.isServant && u.active)
       .where((u) => f.servantId == null || u.id == f.servantId)
@@ -27,7 +25,7 @@ final _servantStatsProvider = FutureProvider.autoDispose
   return Future.wait(servants.map((s) => repo.servantStats(s, f, now)));
 });
 
-/// إحصائيات الخادمات. Servants see only their own card.
+/// إحصائيات الخادمات — full statistics for every servant, visible to all.
 class ServantsStatsScreen extends ConsumerStatefulWidget {
   const ServantsStatsScreen({super.key});
 
@@ -47,14 +45,12 @@ class _State extends ConsumerState<ServantsStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(requireUserProvider);
     final stats = ref.watch(_servantStatsProvider(_filter));
     final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants =
-        user.isFather ? ref.watch(activeServantsProvider).value ?? const [] : const [];
+    final servants = ref.watch(activeServantsProvider).value ?? const [];
 
     return Scaffold(
-      appBar: AppBar(title: Text(user.isFather ? 'إحصائيات الخادمات' : 'إحصائياتي')),
+      appBar: AppBar(title: const Text('إحصائيات الخادمات')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         RangeSelector(
           preset: _preset,
@@ -66,16 +62,15 @@ class _State extends ConsumerState<ServantsStatsScreen> {
         ),
         const SizedBox(height: 8),
         Wrap(spacing: 12, runSpacing: 8, children: [
-          if (user.isFather)
-            DropdownButton<String?>(
-              value: _servantId,
-              hint: const Text('كل الخادمات'),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('كل الخادمات')),
-                for (final s in servants) DropdownMenuItem(value: s.id, child: Text(s.name)),
-              ],
-              onChanged: (v) => setState(() => _servantId = v),
-            ),
+          DropdownButton<String?>(
+            value: _servantId,
+            hint: const Text('كل الخادمات'),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('كل الخادمات')),
+              for (final s in servants) DropdownMenuItem(value: s.id, child: Text(s.name)),
+            ],
+            onChanged: (v) => setState(() => _servantId = v),
+          ),
           DropdownButton<String?>(
             value: _streetId,
             hint: const Text('كل الشوارع'),
@@ -147,7 +142,7 @@ class _ServantCard extends StatelessWidget {
             Text(s.servantName, style: Theme.of(context).textTheme.titleLarge),
             const Divider(height: 24),
             Wrap(alignment: WrapAlignment.spaceAround, runSpacing: 16, children: [
-              cell('السيدات المسؤولة', '${s.assignedWomen}'),
+              cell('السيدات المسؤولة عنهن (حسب الشارع)', '${s.assignedWomen}'),
               cell('نسبة الحضور', percent(s.attendanceRate), AppColors.present),
               cell('مرات الغياب', '${s.meetingAbsent}', AppColors.absent),
               cell('غياب متتالي', '${s.withConsecutiveAbsences}', AppColors.absent),

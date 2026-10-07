@@ -10,16 +10,49 @@ import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/states.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
+import '../../../core/services/sync_status.dart';
 import '../../users/data/users_repository.dart';
 import '../../women/domain/woman.dart';
+import '../data/auto_absence_service.dart';
 import 'attendance_controller.dart';
 
-class AttendanceScreen extends ConsumerWidget {
+/// Wednesday attendance: only the present are marked. After the Wednesday
+/// 9pm cutoff, every still-unmarked woman is auto-marked absent once.
+class AttendanceScreen extends ConsumerStatefulWidget {
   const AttendanceScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AttendanceScreen> createState() => _AttendanceScreenState();
+}
+
+class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
+  final _autoFilled = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoFill());
+  }
+
+  /// Fills unmarked women as absent once the 9pm cutoff has passed, then runs
+  /// the افتقاد rules for the newly-absent women. Idempotent: only missing
+  /// records are created, never overwritten.
+  void _maybeAutoFill() {
+    final date = ref.read(meetingDateProvider);
+    final meetingId = Dates.dayId(date);
+    if (_autoFilled.contains(meetingId)) return;
+    if (!Dates.cutoffPassed(date, DateTime.now())) return;
+    _autoFilled.add(meetingId);
+    ref.read(syncControllerProvider.notifier).track(ref
+        .read(autoAbsenceServiceProvider)
+        .runIfDue(ref.read(requireUserProvider), meeting: date));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(meetingDateProvider, (_, _) => _maybeAutoFill());
     final women = ref.watch(visibleAttendanceWomenProvider);
     final statuses = ref.watch(meetingStatusesProvider).value ?? const {};
     return Scaffold(
@@ -81,6 +114,7 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final date = ref.watch(meetingDateProvider);
     final filter = ref.watch(attendanceFilterProvider);
+    final absentOnly = ref.watch(absentOnlyProvider);
     final streets = ref.watch(streetsProvider).value ?? const [];
     final servants = ref.watch(activeServantsProvider).value ?? const [];
     final notifier = ref.read(attendanceFilterProvider.notifier);
@@ -96,6 +130,16 @@ class _Header extends ConsumerWidget {
             icon: const Icon(Icons.calendar_month),
             label: Text('${Dates.weekdayAr(date)}  ${Dates.display(date)}'),
           ),
+          if (absentOnly) ...[
+            const SizedBox(height: 8),
+            FilterChip(
+              avatar: const Icon(Icons.person_off, size: 20),
+              label: const Text('الغائبات فقط — عرض الكل'),
+              selected: true,
+              onSelected: (_) =>
+                  ref.read(absentOnlyProvider.notifier).set(false),
+            ),
+          ],
           const SizedBox(height: 8),
           TextField(
             onChanged: (q) => notifier.set(filter.copyWith(query: q)),
@@ -131,7 +175,7 @@ class _Header extends ConsumerWidget {
                   initialValue: filter.servantId,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'الخادمة',
+                      labelText: 'خادمة الشارع',
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
                   items: [
@@ -173,18 +217,18 @@ class _Summary extends ConsumerWidget {
     final rate = present + absent == 0 ? 0.0 : present / (present + absent);
     final actions = ref.read(attendanceActionsProvider);
 
-    Future<void> bulk(AttendanceStatus s) async {
+    Future<void> bulkPresent() async {
       final targets = women.where((w) => statuses[w.id] == null).toList();
       final all = targets.isEmpty;
       final list = all ? women : targets;
       final ok = await confirmAction(
         context,
-        title: s == AttendanceStatus.present ? 'تسجيل الكل حاضر' : 'تسجيل الكل غائب',
+        title: 'تسجيل الكل حاضر',
         message: all
-            ? 'سيتم تغيير حالة كل السيدات المعروضات (${list.length}).'
-            : 'سيتم تسجيل ${list.length} سيدة لم تُسجل بعد كـ "${s.label}".',
+            ? 'سيتم تغيير حالة كل السيدات المعروضات (${list.length}) إلى حاضر.'
+            : 'سيتم تسجيل ${list.length} سيدة لم تُسجل بعد كحاضر.',
       );
-      if (ok) actions.markAll(list, s);
+      if (ok) actions.markAll(list, AttendanceStatus.present);
     }
 
     return Card(
@@ -198,25 +242,18 @@ class _Summary extends ConsumerWidget {
             _count('النسبة', null, AppColors.primary, text: percent(rate)),
           ]),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => bulk(AttendanceStatus.present),
-                icon: const Icon(Icons.done_all, color: AppColors.present),
-                label: const Text('الكل حاضر'),
-              ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: bulkPresent,
+              icon: const Icon(Icons.done_all, color: AppColors.present),
+              label: const Text('الكل حاضر'),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => bulk(AttendanceStatus.absent),
-                icon: const Icon(Icons.remove_done, color: AppColors.absent),
-                label: const Text('الكل غائب'),
-              ),
-            ),
-          ]),
+          ),
           const SizedBox(height: 6),
-          const Text('يتم الحفظ تلقائياً — حتى بدون إنترنت',
+          const Text(
+              'علّمي الحاضرات فقط — الغياب يُسجل تلقائياً الأربعاء 9م. الحفظ تلقائي حتى بدون إنترنت',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, color: AppColors.textMuted)),
         ]),
       ),
@@ -243,43 +280,51 @@ class _AttendanceRow extends ConsumerWidget {
       AttendanceStatus.absent => AppColors.absentLight,
       null => Colors.white,
     };
+    final servantName =
+        ref.watch(streetMapProvider)[woman.streetId]?.servantName;
     return Card(
       color: bg,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        child: Row(children: [
-          Expanded(
-            child: InkWell(
-              onLongPress: status == null
-                  ? null
-                  : () async {
-                      final ok = await confirmAction(context,
-                          title: 'مسح التسجيل',
-                          message: 'مسح تسجيل حضور "${woman.fullName}"؟');
-                      if (ok) actions.clear(woman);
-                    },
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(woman.fullName,
-                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-                if (woman.streetName.isNotEmpty)
-                  Text(woman.streetName,
-                      style: const TextStyle(fontSize: 15, color: AppColors.textMuted)),
-              ]),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+              child: InkWell(
+                onLongPress: status == null
+                    ? null
+                    : () async {
+                        final ok = await confirmAction(context,
+                            title: 'مسح التسجيل',
+                            message: 'مسح تسجيل حضور "${woman.fullName}"؟');
+                        if (ok) actions.clear(woman);
+                      },
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(woman.fullName,
+                      style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+                  if (woman.streetName.isNotEmpty)
+                    Text(woman.streetName,
+                        style: const TextStyle(fontSize: 15, color: AppColors.textMuted)),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.badge, size: 16, color: AppColors.textMuted),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'الخادمة (حسب الشارع): ${servantName ?? 'غير معينة'}',
+                        style: const TextStyle(
+                            fontSize: 14, color: AppColors.textMuted),
+                      ),
+                    ),
+                  ]),
+                ]),
+              ),
             ),
-          ),
-          _StatusButton(
-            label: 'حاضر',
-            selected: status == AttendanceStatus.present,
-            color: AppColors.present,
-            onTap: () => actions.mark(woman, AttendanceStatus.present),
-          ),
-          const SizedBox(width: 8),
-          _StatusButton(
-            label: 'غائب',
-            selected: status == AttendanceStatus.absent,
-            color: AppColors.absent,
-            onTap: () => actions.mark(woman, AttendanceStatus.absent),
-          ),
+            _StatusButton(
+              label: 'حاضر',
+              selected: status == AttendanceStatus.present,
+              color: AppColors.present,
+              onTap: () => actions.mark(woman, AttendanceStatus.present),
+            ),
+          ]),
         ]),
       ),
     );

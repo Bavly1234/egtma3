@@ -1,6 +1,16 @@
 {
   "indexes": [
     {
+      "collectionGroup": "meetings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "women",
       "queryScope": "COLLECTION",
       "fields": [

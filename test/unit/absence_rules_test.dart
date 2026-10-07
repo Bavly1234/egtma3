@@ -104,4 +104,97 @@ void main() {
       expect(d5.cancelIds, ['ph']);
     });
   });
+
+  group('intermittent absences (Rules I/J) — alternating, no duplicates', () {
+    final now = DateTime(2026, 10, 7, 12);
+    // 8 Wednesdays, oldest → newest.
+    final w8 = [
+      '2026-08-19', '2026-08-26', '2026-09-02', '2026-09-09',
+      '2026-09-16', '2026-09-23', '2026-09-30', '2026-10-07',
+    ];
+    List<AttendanceMark> alt(List<AttendanceStatus> s) =>
+        [for (var i = 0; i < s.length; i++) AttendanceMark(w8[i], s[i])];
+    ExistingSuggestion oldSug(String id, SuggestionType t, SuggestionStatus s,
+            String? start, DateTime created) =>
+        ExistingSuggestion(
+            id: id, type: t, status: s, streakStartMeetingId: start, createdAt: created);
+
+    test('Rule I: 3 absences in last 5 (alternating) => phone افتقاد', () {
+      // Newest first: A,P,A,P,A → streak is only 1, but 3 of last 5 are absent.
+      final m = alt([p, p, p, a, p, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      expect(streak.count, 1);
+      final d = AbsenceRules.decide(streak, const [], marks: m, now: now);
+      expect(d.create, SuggestionType.phone);
+      expect(d.streakStartMeetingId, 'int_2026-10-07');
+      expect(d.reason, contains('متقطعة'));
+    });
+
+    test('Rule I: no duplicate while a phone افتقاد is active', () {
+      final m = alt([p, p, p, a, p, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      final d = AbsenceRules.decide(streak, [
+        oldSug('ph', SuggestionType.phone, SuggestionStatus.inProgress,
+            '2026-09-23', DateTime(2026, 9, 24)),
+      ], marks: m, now: now);
+      expect(d.create, isNull);
+    });
+
+    test('Rule I: cooldown blocks weekly duplicates, expiry allows a new one', () {
+      final m = alt([p, p, p, a, p, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      final recentDone = [
+        oldSug('ph', SuggestionType.phone, SuggestionStatus.completed,
+            '2026-09-16', DateTime(2026, 10, 2)),
+      ];
+      expect(
+          AbsenceRules.decide(streak, recentDone, marks: m, now: now).create,
+          isNull);
+      final oldDone = [
+        oldSug('ph', SuggestionType.phone, SuggestionStatus.completed,
+            '2026-08-19', DateTime(2026, 8, 20)),
+      ];
+      expect(
+          AbsenceRules.decide(streak, oldDone, marks: m, now: now).create,
+          SuggestionType.phone);
+    });
+
+    test('Rule J: 5 absences in last 8 (alternating) => home visit', () {
+      // Newest first: A,P,A,A,P,A,A,P → streak 1, 5 of last 8 absent.
+      final m = alt([p, a, a, p, a, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      expect(streak.count, 1);
+      final d = AbsenceRules.decide(streak, const [], marks: m, now: now);
+      expect(d.create, SuggestionType.homeVisit);
+      expect(d.reason, contains('متقطعة'));
+    });
+
+    test('Rule J: active phone blocks a parallel home task (no duplicates)', () {
+      final m = alt([p, a, a, p, a, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      final d = AbsenceRules.decide(streak, [
+        oldSug('ph', SuggestionType.phone, SuggestionStatus.assigned,
+            '2026-09-30', DateTime(2026, 10, 1)),
+      ], marks: m, now: now);
+      expect(d.create, isNull);
+    });
+
+    test('Rule J: after the phone is done long ago, home visit is created', () {
+      final m = alt([p, a, a, p, a, a, p, a]);
+      final streak = AbsenceRules.computeStreak(m);
+      final d = AbsenceRules.decide(streak, [
+        oldSug('ph', SuggestionType.phone, SuggestionStatus.completed,
+            '2026-09-02', DateTime(2026, 9, 3)),
+      ], marks: m, now: now);
+      expect(d.create, SuggestionType.homeVisit);
+    });
+
+    test('steady attendance => nothing, even with old history', () {
+      final m = alt([a, p, a, p, a, p, p, p]);
+      final streak = AbsenceRules.computeStreak(m);
+      expect(streak.count, 0);
+      final d = AbsenceRules.decide(streak, const [], marks: m, now: now);
+      expect(d.create, isNull);
+    });
+  });
 }

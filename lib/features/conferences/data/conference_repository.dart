@@ -105,12 +105,14 @@ class ConferenceRepository {
   }
 
   Future<void> mark(String conferenceId, String dayId, Woman w,
-          AttendanceStatus status, AppUser actor) =>
+          AttendanceStatus status, AppUser actor,
+          {String? servantId}) =>
       _att.doc(ConferenceAttendance.docId(conferenceId, dayId, w.id)).set({
         'conferenceId': conferenceId,
         'conferenceDayId': dayId,
         'womanId': w.id,
-        'servantId': w.assignedServantId,
+        // Only the per-conference assignment counts; no global assignment.
+        'servantId': servantId,
         'attendanceStatus': status.wire,
         'markedBy': actor.id,
         'timestamp': FieldValue.serverTimestamp(),
@@ -120,7 +122,7 @@ class ConferenceRepository {
       String conferenceId, AppUser user) async {
     try {
       var q = _att.where('conferenceId', isEqualTo: conferenceId);
-        final snap = await q.get();
+        final snap = await AppFailure.guard(q.get());
       return snap.docs
           .map((d) => ConferenceAttendance.fromMap(d.data()))
           .whereType<ConferenceAttendance>()

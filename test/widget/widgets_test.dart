@@ -23,7 +23,6 @@ Woman w(String id, String name) => Woman(
       phone: '',
       dateOfBirth: null,
       active: true,
-      assignedServantId: 's1',
     );
 
 class _RecordingActions extends AttendanceActions {
@@ -67,7 +66,7 @@ void main() {
     expect(t.getSize(find.byType(Card)).height, greaterThanOrEqualTo(56));
   });
 
-  testWidgets('attendance: one tap per woman, summary updates', (t) async {
+  testWidgets('attendance: present-only marking, summary updates', (t) async {
     late _RecordingActions actions;
     await t.pumpWidget(wrap(const AttendanceScreen(), [
       requireUserProvider.overrideWithValue(servant),
@@ -85,9 +84,12 @@ void main() {
     // Summary: 1 present, 0 absent, 1 unmarked.
     expect(find.text('100%'), findsOneWidget);
 
-    // Tap "غائب" on the second row.
-    final absentButtons = find.widgetWithText(OutlinedButton, 'غائب');
-    await t.tap(absentButtons.last);
-    expect(actions.calls, [('b', AttendanceStatus.absent)]);
+    // Tap "حاضر" on the second row (only present is marked; absence is
+    // auto-filled at Wednesday 9pm).
+    final presentButtons = find.widgetWithText(OutlinedButton, 'حاضر');
+    await t.ensureVisible(presentButtons.last);
+    await t.pumpAndSettle();
+    await t.tap(presentButtons.last, warnIfMissed: false);
+    expect(actions.calls, [('b', AttendanceStatus.present)]);
   });
 }
