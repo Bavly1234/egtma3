@@ -35,13 +35,15 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   late DateRange _range = _preset.resolve(DateTime.now());
   bool _busy = false;
 
+  /// First five columns match the church's import template exactly
+  /// (A–E), so an exported file can be re-imported as is.
   static const _womenHeaders = [
-    'الاسم', 'الشارع', 'العنوان', 'التليفون', 'تاريخ الميلاد',
+    'الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد',
     'نشطة', 'غياب متتالي', 'مرات الحضور', 'مرات الغياب', 'مكالمات', 'زيارات', 'ملاحظات',
   ];
 
   List<Object?> _womanRow(Woman w) => [
-        w.fullName, w.streetName, w.address, w.phone, w.dateOfBirth,
+        w.fullName, w.phone, w.streetName, w.address, w.dateOfBirth,
         w.active, w.consecutiveAbsences,
         w.totalPresent, w.totalAbsent, w.phoneCalls, w.homeVisits, w.notes,
       ];

@@ -19,6 +19,42 @@ void main() {
       expect(c.indexes[ImportField.name], 1);
     });
 
+    test('church template headers (A–E) exactly as in the Excel sheet', () {
+      final rows = [
+        ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد'],
+        ['مريم أحمد', '01012345678', 'شارع مار جرجس', '10 شارع مار جرجس', '15/03/1970'],
+      ];
+      final c = ColumnDetection.detect(rows.first);
+      expect(c.isValid, isTrue);
+      expect(c.indexes, {
+        ImportField.name: 0,
+        ImportField.phone: 1,
+        ImportField.street: 2,
+        ImportField.address: 3,
+        ImportField.dateOfBirth: 4,
+      });
+      final parsed = ImportParser.parse(rows, c, now: now).single;
+      expect(parsed.isValid, isTrue);
+      expect(parsed.draft!.fullName, 'مريم أحمد');
+      expect(parsed.draft!.phone, '01012345678');
+      expect(parsed.draft!.streetName, 'شارع مار جرجس');
+      expect(parsed.draft!.address, '10 شارع مار جرجس');
+      expect(parsed.draft!.dateOfBirth, DateTime(1970, 3, 15));
+    });
+
+    test('template headers survive a real .xlsx round trip', () {
+      final bytes = ExcelExportService.build('Sheet',
+          ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد'], [
+        ['سعاد جرجس', '01112223334', 'شارع النصر', '5 شارع النصر', '01/01/1960'],
+      ]);
+      final rows = ExcelImportService.readRows(bytes);
+      final parsed =
+          ImportParser.parse(rows, ColumnDetection.detect(rows.first), now: now).single;
+      expect(parsed.isValid, isTrue);
+      expect(parsed.draft!.phone, '01112223334');
+      expect(parsed.draft!.streetName, 'شارع النصر');
+    });
+
     test('missing columns reported', () {
       final c = ColumnDetection.detect(['name', 'phone']);
       expect(c.isValid, isFalse);
