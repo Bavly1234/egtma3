@@ -164,8 +164,7 @@ class _ServantBody extends ConsumerWidget {
         color: AppColors.absent,
         background: AppColors.absentLight,
         onTap: () {
-          ref.read(absentOnlyProvider.notifier).set(true);
-          context.go(Routes.attendance);
+          _openAbsent(context, ref, o);
         },
       ),
       const SizedBox(height: 12),
@@ -232,8 +231,7 @@ class _FatherBody extends ConsumerWidget {
             color: AppColors.absent,
             background: AppColors.absentLight,
             onTap: () {
-              ref.read(absentOnlyProvider.notifier).set(true);
-              context.go(Routes.attendance);
+              _openAbsent(context, ref, o);
             }),
       ]),
       const SectionTitle('الافتقاد (هذا الشهر)'),
@@ -283,4 +281,14 @@ class _FatherBody extends ConsumerWidget {
       ]),
     ]);
   }
+}
+
+/// Opens the attendance sheet of the SAME meeting the card counts, showing
+/// only the absent women.
+void _openAbsent(BuildContext context, WidgetRef ref, OverviewStats? o) {
+  if (o != null) {
+    ref.read(meetingDateProvider.notifier).set(Dates.parseDayId(o.meetingId));
+  }
+  ref.read(absentOnlyProvider.notifier).set(true);
+  context.go(Routes.attendance);
 }

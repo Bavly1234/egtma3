@@ -120,9 +120,10 @@ class AbsentOnlyController extends Notifier<bool> {
   void set(bool v) => state = v;
 }
 
+// Not autoDispose: the dashboard sets it right before navigating, when the
+// attendance screen is not listening yet.
 final absentOnlyProvider =
-    NotifierProvider.autoDispose<AbsentOnlyController, bool>(
-        AbsentOnlyController.new);
+    NotifierProvider<AbsentOnlyController, bool>(AbsentOnlyController.new);
 
 /// Writes go straight to Firestore's offline cache (instant UI update via the
 /// statuses stream) and are tracked for the sync indicator. After each write
@@ -148,6 +149,9 @@ class AttendanceActions {
   }
 
   void markAll(List<Woman> women, AttendanceStatus status) {
+    // Without the current statuses we can't compute the counter change
+    // (a re-mark would be counted twice), so wait until they are loaded.
+    if (!ref.read(meetingStatusesProvider).hasValue) return;
     final meetingId = Dates.dayId(ref.read(meetingDateProvider));
     final user = ref.read(requireUserProvider);
     final previous = Map.of(_current);

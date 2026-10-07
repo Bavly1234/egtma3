@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
@@ -76,6 +77,23 @@ class StreetRepository {
         'servantName': servant?.name,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      // Open افتقاد tasks of this street move to the new servant.
+      final open = await AppFailure.guard(_db
+          .collection(FsPaths.suggestions)
+          .where('streetId', isEqualTo: streetId)
+          .where('status', whereIn: SuggestionStatus.activeWires)
+          .get());
+      for (var i = 0; i < open.docs.length; i += 400) {
+        final b = _db.batch();
+        for (final d in open.docs.skip(i).take(400)) {
+          b.update(d.reference, {
+            'assignedServantId': servant?.id,
+            'assignedServantName': servant?.name,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        await b.commit();
+      }
     } catch (e, st) {
       throw AppFailure.from(e, st);
     }
