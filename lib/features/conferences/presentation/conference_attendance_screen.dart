@@ -8,12 +8,24 @@ import '../../../core/utils/arabic_text.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
-import '../../attendance/presentation/attendance_controller.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../women/domain/woman.dart';
+import '../../women/domain/women_filter.dart';
+import '../../women/data/women_repository.dart';
 import '../data/conference_repository.dart';
 import '../domain/conference.dart';
+
+/// All active women, independent of any filter chosen on the Wednesday
+/// attendance screen (a conference is for everyone).
+final _conferenceWomenProvider =
+    FutureProvider.autoDispose<List<Woman>>((ref) async {
+  final list = await ref.watch(womenRepositoryProvider).all(
+      ref.watch(requireUserProvider), const WomenFilter(active: true));
+  list.sort((a, b) => ArabicText.normalizeName(a.fullName)
+      .compareTo(ArabicText.normalizeName(b.fullName)));
+  return list;
+});
 
 typedef _DayKey = ({String conferenceId, String dayId});
 
@@ -99,7 +111,7 @@ class _DayListState extends ConsumerState<_DayList>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final women = ref.watch(attendanceWomenProvider);
+    final women = ref.watch(_conferenceWomenProvider);
     final statuses = ref.watch(_dayStatusesProvider(
                 (conferenceId: widget.conference.id, dayId: widget.day.id)))
             .value ??

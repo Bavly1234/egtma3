@@ -8,6 +8,7 @@ import '../../../core/routing/routes.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/permissions.dart';
+import '../../streets/data/street_repository.dart';
 import 'filters_sheet.dart';
 import 'woman_tile.dart';
 import 'women_list_controller.dart';
@@ -55,6 +56,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
     final user = ref.watch(requireUserProvider);
     final filter = ref.watch(womenFilterProvider);
     final list = ref.watch(womenListProvider);
+    final streets = ref.watch(streetMapProvider);
     final canManage = Permissions.canManageWomen(user);
 
     return Scaffold(
@@ -112,6 +114,25 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
             ),
           ]),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FilterChip(
+              avatar: const Icon(Icons.signpost, size: 20),
+              label: const Text('شوارعي فقط'),
+              selected: filter.streetIds != null,
+              onSelected: (on) {
+                final mine = <String>{
+                  for (final st in ref.read(streetsProvider).value ?? const [])
+                    if (st.servantId == user.id) st.id,
+                };
+                ref.read(womenFilterProvider.notifier).set(
+                    filter.copyWith(streetIds: () => on ? mine : null));
+              },
+            ),
+          ),
+        ),
         if (!filter.isEmpty)
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -168,6 +189,8 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
                     final w = s.items[i];
                     return WomanTile(
                       woman: w,
+                      servantName: streets[w.streetId]?.servantName,
+                      isMine: streets[w.streetId]?.servantId == user.id,
                       onTap: () => context.push(Routes.woman(w.id)),
                     );
                   },

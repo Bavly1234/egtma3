@@ -10,8 +10,14 @@ class WomanTile extends StatelessWidget {
     required this.woman,
     this.onTap,
     this.trailing,
+    this.servantName,
+    this.isMine = false,
   });
   final Woman woman;
+
+  /// Servant of the woman's street (the only assignment).
+  final String? servantName;
+  final bool isMine;
   final VoidCallback? onTap;
   final Widget? trailing;
 
@@ -20,6 +26,7 @@ class WomanTile extends StatelessWidget {
     final w = woman;
     final sub = [
       if (w.streetName.isNotEmpty) w.streetName,
+      if (servantName != null) 'الخادمة: $servantName',
     ].join('  •  ');
     return Card(
       child: InkWell(
@@ -54,6 +61,9 @@ class WomanTile extends StatelessWidget {
                             fontSize: 16, color: AppColors.textMuted)),
                   const SizedBox(height: 4),
                   Wrap(spacing: 6, runSpacing: 4, children: [
+                    if (isMine)
+                      const _Badge('✓ شارعك', AppColors.primary,
+                          AppColors.primaryLight),
                     if (!w.active)
                       const _Badge('غير نشطة', Colors.black54, Color(0xFFEEEEEE)),
                     if (w.consecutiveAbsences >= 2)

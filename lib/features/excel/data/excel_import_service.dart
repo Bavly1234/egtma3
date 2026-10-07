@@ -56,7 +56,12 @@ class ExcelImportService {
         null => null,
         TextCellValue t => t.value.toString(),
         IntCellValue i => i.value,
-        DoubleCellValue d => d.value,
+        // Phones typed as numbers come back as 1012345678.0 — keep integers
+        // integral so the ".0" doesn't become an extra digit.
+        DoubleCellValue d =>
+          d.value == d.value.truncateToDouble() && d.value.abs() < 1e15
+              ? d.value.toInt()
+              : d.value,
         DateCellValue d => DateTime(d.year, d.month, d.day),
         DateTimeCellValue d => DateTime(d.year, d.month, d.day),
         BoolCellValue b => b.value.toString(),
@@ -96,9 +101,12 @@ class ExcelImportService {
     final rows = preview.valid;
     try {
       var done = 0;
-      for (var i = 0; i < rows.length; i += 200) {
+      // 3 writes per row (street, street counter, woman): 100 rows = 300
+      // writes, safely under Firestore's 500-writes-per-batch limit.
+      const chunk = 100;
+      for (var i = 0; i < rows.length; i += chunk) {
         final batch = _db.batch();
-        for (final row in rows.skip(i).take(200)) {
+        for (final row in rows.skip(i).take(chunk)) {
           final d = row.draft!;
           final streetId = _streets.upsertInBatch(batch, d.streetName);
           batch.set(_db.collection(FsPaths.streets).doc(streetId),
@@ -118,7 +126,7 @@ class ExcelImportService {
           });
         }
         await batch.commit();
-        done += rows.skip(i).take(200).length;
+        done += rows.skip(i).take(chunk).length;
         onProgress?.call(done, rows.length);
       }
       _audit.log(

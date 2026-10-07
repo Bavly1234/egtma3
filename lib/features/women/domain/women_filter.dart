@@ -41,6 +41,7 @@ class WomenFilter {
     this.lastAttendance = LastAttendanceFilter.any,
     this.minConsecutiveAbsences = 0,
     this.maxAttendanceRate,
+    this.streetIds,
   });
 
   final String query;
@@ -53,6 +54,10 @@ class WomenFilter {
 
   /// 0..1 — e.g. 0.5 shows women attending at most 50% of meetings.
   final double? maxAttendanceRate;
+
+  /// "My streets": only women living in these streets (a servant is
+  /// assigned by street). Applied in memory.
+  final Set<String>? streetIds;
 
   static const empty = WomenFilter();
 
@@ -67,7 +72,8 @@ class WomenFilter {
       !hasServerFilters &&
       lastAttendance == LastAttendanceFilter.any &&
       minConsecutiveAbsences == 0 &&
-      maxAttendanceRate == null;
+      maxAttendanceRate == null &&
+      streetIds == null;
 
   int get activeCount => [
         query.trim().isNotEmpty,
@@ -78,6 +84,7 @@ class WomenFilter {
         lastAttendance != LastAttendanceFilter.any,
         minConsecutiveAbsences > 0,
         maxAttendanceRate != null,
+        streetIds != null,
       ].where((b) => b).length;
 
   List<String> get queryTokens => ArabicText.normalize(query)
@@ -94,6 +101,7 @@ class WomenFilter {
           '${w.fullName} ${w.streetName} ${w.address} ${w.phone}');
       if (!tokens.every(hay.contains)) return false;
     }
+    if (streetIds != null && !streetIds!.contains(w.streetId)) return false;
     if (w.consecutiveAbsences < minConsecutiveAbsences) return false;
     if (maxAttendanceRate != null) {
       final r = w.attendanceRate;
@@ -121,6 +129,7 @@ class WomenFilter {
     LastAttendanceFilter? lastAttendance,
     int? minConsecutiveAbsences,
     double? Function()? maxAttendanceRate,
+    Set<String>? Function()? streetIds,
   }) =>
       WomenFilter(
         query: query ?? this.query,
@@ -134,5 +143,6 @@ class WomenFilter {
         maxAttendanceRate: maxAttendanceRate != null
             ? maxAttendanceRate()
             : this.maxAttendanceRate,
+        streetIds: streetIds != null ? streetIds() : this.streetIds,
       );
 }

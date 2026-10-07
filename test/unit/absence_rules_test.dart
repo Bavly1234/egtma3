@@ -130,6 +130,20 @@ void main() {
       expect(d.reason, contains('متقطعة'));
     });
 
+    test('Rule I: attending next week keeps the intermittent task (alternating)', () {
+      // Created at the 3rd alternating absence; the next week she attends.
+      final existing = [
+        oldSug('int', SuggestionType.phone, SuggestionStatus.pending,
+            'int_2026-09-30', DateTime(2026, 9, 30)),
+        oldSug('cons', SuggestionType.phone, SuggestionStatus.pending,
+            '2026-09-23', DateTime(2026, 9, 30)),
+      ];
+      final d = AbsenceRules.decide(AbsenceStreak.none, existing,
+          marks: alt([p, p, p, a, p, a, a, p]), now: now);
+      // Only the consecutive-streak task is cancelled.
+      expect(d.cancelIds, ['cons']);
+    });
+
     test('Rule I: no duplicate while a phone افتقاد is active', () {
       final m = alt([p, p, p, a, p, a, p, a]);
       final streak = AbsenceRules.computeStreak(m);

@@ -59,8 +59,7 @@ service cloud.firestore {
     }
 
     // ---------- women: full CRUD for every active servant ----------
-    // No global assignment: assignment lives per-context (meeting_assignments,
-    // conference_assignments, suggestion.assignedServantId).
+    // The only assignment is by street (streets/{id}.servantId).
     function summaryFields() {
       return ['consecutiveAbsences', 'totalPresent', 'totalAbsent', 'lastAttendanceDate',
               'activeSuggestionType', 'phoneCalls', 'homeVisits', 'lastCallAt', 'lastVisitAt',
@@ -109,7 +108,7 @@ service cloud.firestore {
         && isStatus(request.resource.data.status)
         && request.resource.data.markedBy == request.auth.uid
         && staffFor(request.resource.data.womanId);
-      // The per-meeting servant is recorded at mark time (no global assignment).
+      // servantId = the street's servant at mark time (for statistics).
       allow update: if isFather() && onlyChanges(['servantId']);
       allow delete: if isActive();
     }

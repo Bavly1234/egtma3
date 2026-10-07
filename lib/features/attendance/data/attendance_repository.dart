@@ -5,6 +5,7 @@ import '../../../core/constants/enums.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
+import '../../../core/utils/dates.dart';
 import '../../audit/data/audit_repository.dart';
 import '../../audit/domain/audit_entry.dart';
 import '../../auth/domain/app_user.dart';
@@ -135,8 +136,14 @@ class AttendanceRepository {
         .collection(FsPaths.women)
         .where('active', isEqualTo: true)
         .get());
-    final unmarked =
-        womenSnap.docs.where((d) => !marked.contains(d.id)).toList();
+    // Women added after that Wednesday's cutoff weren't members yet: never
+    // mark them absent for it.
+    final cutoff = Dates.meetingCutoff(Dates.parseDayId(meetingId));
+    final unmarked = womenSnap.docs.where((d) {
+      if (marked.contains(d.id)) return false;
+      final created = tsToDate(d.data()['createdAt']);
+      return created == null || !created.isAfter(cutoff);
+    }).toList();
     final streetsSnap =
         await AppFailure.guard(_db.collection(FsPaths.streets).get());
     final streetServant = {

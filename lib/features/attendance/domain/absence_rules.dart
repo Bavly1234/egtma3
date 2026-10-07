@@ -52,9 +52,13 @@ class SuggestionDecision {
       create == null && cancelIds.isEmpty;
 }
 
-/// Pure business logic. Mirrored exactly by functions/src/shared/rules.ts,
-/// which is the authority that writes suggestions.
+/// Pure business logic, applied on the device by AbsenceProcessor.
 abstract final class AbsenceRules {
+  /// Intermittent suggestions use a streak id prefixed with `int_`.
+  static const intermittentPrefix = 'int_';
+  static bool isIntermittent(ExistingSuggestion s) =>
+      s.streakStartMeetingId?.startsWith(intermittentPrefix) ?? false;
+
   /// Rule C: counts absences from the most recent meeting backwards and stops
   /// at the first attendance — old absences before a present are ignored.
   static AbsenceStreak computeStreak(Iterable<AttendanceMark> marks) {
@@ -104,10 +108,14 @@ abstract final class AbsenceRules {
     DateTime? now,
   }) {
     if (streak.count == 0) {
+      // Attending ends a consecutive streak, so its not-yet-started tasks are
+      // cancelled. Intermittent (alternating) tasks are kept: attending one
+      // week is exactly the alternating pattern they were created for.
       final stale = existing
           .where((s) =>
-              s.status == SuggestionStatus.pending ||
-              s.status == SuggestionStatus.assigned)
+              (s.status == SuggestionStatus.pending ||
+                  s.status == SuggestionStatus.assigned) &&
+              !isIntermittent(s))
           .map((s) => s.id)
           .toList();
       return SuggestionDecision(cancelIds: stale);
@@ -196,7 +204,7 @@ abstract final class AbsenceRules {
     final in8 = absentIn(BusinessRules.intermittentHomeWindow);
     if (in8 >= BusinessRules.intermittentHomeMin &&
         !recent(SuggestionType.homeVisit)) {
-      final start = 'int_$latestAbsent';
+      final start = '$intermittentPrefix$latestAbsent';
       if (!alreadyForStreak(SuggestionType.homeVisit, start)) {
         return SuggestionDecision(
           create: SuggestionType.homeVisit,
@@ -212,7 +220,7 @@ abstract final class AbsenceRules {
     final in5 = absentIn(BusinessRules.intermittentPhoneWindow);
     if (in5 >= BusinessRules.intermittentPhoneMin &&
         !recent(SuggestionType.phone)) {
-      final start = 'int_$latestAbsent';
+      final start = '$intermittentPrefix$latestAbsent';
       if (!alreadyForStreak(SuggestionType.phone, start)) {
         return SuggestionDecision(
           create: SuggestionType.phone,

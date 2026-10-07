@@ -55,6 +55,18 @@ void main() {
       expect(parsed.draft!.streetName, 'شارع النصر');
     });
 
+    test('phone stored as a NUMBER in Excel (leading zero dropped) is valid', () {
+      final bytes = ExcelExportService.build('Sheet',
+          ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد'], [
+        ['نادية حنا', 1012345678.0, 'شارع النصر', '5 شارع النصر', '01/01/1960'],
+      ]);
+      final rows = ExcelImportService.readRows(bytes);
+      final parsed =
+          ImportParser.parse(rows, ColumnDetection.detect(rows.first), now: now).single;
+      expect(parsed.errors, isEmpty);
+      expect(parsed.draft!.phone, '01012345678');
+    });
+
     test('missing columns reported', () {
       final c = ColumnDetection.detect(['name', 'phone']);
       expect(c.isValid, isFalse);

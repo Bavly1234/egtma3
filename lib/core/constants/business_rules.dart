@@ -1,4 +1,4 @@
-/// Business thresholds. Mirrored in functions/src/shared/rules.ts.
+/// Business thresholds used by the on-device follow-up engine.
 abstract final class BusinessRules {
   /// Consecutive Wednesday absences that trigger a phone follow-up suggestion.
   static const phoneThreshold = 2;
