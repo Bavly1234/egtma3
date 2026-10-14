@@ -100,6 +100,12 @@ class ExcelImportService {
   }) async {
     final rows = preview.valid;
     try {
+      // Resolve each distinct street once (renamed streets keep their id).
+      final streetIds = <String, String>{};
+      for (final r in rows) {
+        final key = ArabicText.normalize(r.draft!.streetName);
+        streetIds[key] ??= await _streets.resolveId(r.draft!.streetName);
+      }
       var done = 0;
       // 3 writes per row (street, street counter, woman): 100 rows = 300
       // writes, safely under Firestore's 500-writes-per-batch limit.
@@ -108,7 +114,8 @@ class ExcelImportService {
         final batch = _db.batch();
         for (final row in rows.skip(i).take(chunk)) {
           final d = row.draft!;
-          final streetId = _streets.upsertInBatch(batch, d.streetName);
+          final streetId = _streets.upsertInBatch(batch, d.streetName,
+              id: streetIds[ArabicText.normalize(d.streetName)]);
           batch.set(_db.collection(FsPaths.streets).doc(streetId),
               {'womenCount': FieldValue.increment(1)}, SetOptions(merge: true));
           batch.set(_db.collection(FsPaths.women).doc(), {

@@ -138,8 +138,10 @@ class WomenRepository {
 
   Future<String> create(WomanDraft draft, AppUser actor) async {
     try {
+      final resolved = await _streets.resolveId(draft.streetName);
       final batch = _db.batch();
-      final streetId = _streets.upsertInBatch(batch, draft.streetName);
+      final streetId =
+          _streets.upsertInBatch(batch, draft.streetName, id: resolved);
       _countStreet(batch, streetId, 1);
       final ref = col.doc();
       batch.set(ref, {
@@ -170,8 +172,10 @@ class WomenRepository {
   Future<void> update(String id, WomanDraft draft, AppUser actor) async {
     try {
       final old = (await AppFailure.guard(col.doc(id).get())).data();
+      final resolved = await _streets.resolveId(draft.streetName);
       final batch = _db.batch();
-      final streetId = _streets.upsertInBatch(batch, draft.streetName);
+      final streetId =
+          _streets.upsertInBatch(batch, draft.streetName, id: resolved);
       final oldStreet = old?['streetId'] as String?;
       if (oldStreet != streetId) {
         _countStreet(batch, oldStreet, -1);

@@ -19,9 +19,20 @@ class StreetRepository {
   Stream<List<Street>> watchAll() => _col.orderBy('nameNormalized').snapshots().map(
       (s) => s.docs.map((d) => Street.fromMap(d.id, d.data())).toList());
 
-  /// Adds the street upsert to [batch] and returns its id.
-  String upsertInBatch(WriteBatch batch, String name) {
-    final id = Street.idFor(name);
+  /// The id of the street with this name. A renamed street keeps its old id,
+  /// so look it up by normalised name instead of deriving the id from the
+  /// name (otherwise women of a renamed street would be split into a new,
+  /// unassigned street).
+  Future<String> resolveId(String name) async {
+    final n = ArabicText.normalize(name);
+    final snap = await AppFailure.guard(
+        _col.where('nameNormalized', isEqualTo: n).limit(1).get());
+    return snap.docs.isNotEmpty ? snap.docs.first.id : Street.idFor(name);
+  }
+
+  /// Upserts the street in [batch]. Pass [id] from [resolveId].
+  String upsertInBatch(WriteBatch batch, String name, {String? id}) {
+    id ??= Street.idFor(name);
     batch.set(
       _col.doc(id),
       {

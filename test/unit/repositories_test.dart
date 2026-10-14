@@ -45,6 +45,28 @@ void main() {
     return Woman.fromMap(id, (await db.collection(FsPaths.women).doc(id).get()).data()!);
   }
 
+  test('renamed street: new and edited women stay on the SAME street', () async {
+    final a = await addWoman('مريم أحمد', street: 'شارع النصر');
+    final streets = StreetRepository(db);
+    await streets.rename(a.streetId, 'شارع النصر الجديد');
+    // Add a woman with the new name, and edit the first one.
+    final b = await addWoman('سعاد جرجس', street: 'شارع النصر الجديد');
+    await women.update(
+        a.id,
+        WomanDraft(
+            fullName: a.fullName,
+            streetName: 'شارع النصر الجديد',
+            address: a.address,
+            phone: a.phone,
+            dateOfBirth: a.dateOfBirth),
+        father);
+    final aAfter = (await db.collection(FsPaths.women).doc(a.id).get()).get('streetId');
+    expect(b.streetId, a.streetId);
+    expect(aAfter, a.streetId);
+    expect((await db.collection(FsPaths.streets).get()).size, 1);
+    expect((await db.collection(FsPaths.streets).doc(a.streetId).get()).get('womenCount'), 2);
+  });
+
   test('women CRUD with street upsert and audit', () async {
     final w = await addWoman('مريم أحمد');
     expect(w.streetId, isNotEmpty);

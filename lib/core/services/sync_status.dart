@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 
@@ -77,13 +76,14 @@ class SyncController extends Notifier<SyncState> {
 final syncControllerProvider =
     NotifierProvider<SyncController, SyncState>(SyncController.new);
 
-/// Enables offline persistence where supported.
-/// Enables offline persistence on phones. On the web it stays off: the
-/// browser cache is single-tab, and with the app open in a second tab reads
-/// can hang forever ("loading all the time").
+/// Offline persistence everywhere, so attendance taken without internet is
+/// never lost. On the web the multi-tab cache is used: the default
+/// single-tab cache froze reads ("loading all the time") when the app was
+/// open in a second tab.
 void configureFirestoreOffline(FirebaseFirestore db) {
   db.settings = const Settings(
-    persistenceEnabled: !kIsWeb,
+    persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    webPersistentTabManager: WebPersistentMultipleTabManager(),
   );
 }
