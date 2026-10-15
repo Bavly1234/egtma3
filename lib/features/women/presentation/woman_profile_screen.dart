@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/enums.dart';
 import '../../../core/routing/routes.dart';
+import '../../../core/services/contact_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
@@ -63,6 +64,15 @@ class _ProfileBody extends ConsumerWidget {
             style: TextStyle(color: AppColors.absent, fontSize: 18)),
       const SizedBox(height: 16),
       if (w.hasPhone) ContactButtons(phone: w.phone, whatsApp: w.hasWhatsApp),
+      if (w.hasLandline) ...[
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () => runGuarded(
+              context, () => ref.read(contactLauncherProvider).call(w.landline)),
+          icon: const Icon(Icons.phone),
+          label: Text('اتصال بالأرضي ${w.landline}'),
+        ),
+      ],
       if (canAct) ...[
         const SizedBox(height: 12),
         Row(children: [
@@ -100,15 +110,17 @@ class _ProfileBody extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(children: [
-            InfoRow(icon: Icons.phone, label: 'التليفون', value: w.phone),
+            InfoRow(icon: Icons.phone_android, label: 'الموبايل', value: w.phone),
+            if (w.hasLandline)
+              InfoRow(icon: Icons.phone, label: 'الأرضي', value: w.landline),
             InfoRow(icon: Icons.signpost, label: 'الشارع', value: w.streetName),
             InfoRow(icon: Icons.location_on, label: 'العنوان', value: w.address),
             InfoRow(
               icon: Icons.cake,
-              label: 'تاريخ الميلاد',
+              label: 'عيد الميلاد',
               value: w.dateOfBirth == null
-                  ? ''
-                  : '${Dates.display(w.dateOfBirth)}  (${Dates.ageOn(w.dateOfBirth!, now)} سنة)',
+                  ? w.birth.display
+                  : '${w.birth.display}  (${Dates.ageOn(w.dateOfBirth!, now)} سنة)',
             ),
             if (w.notes.isNotEmpty)
               InfoRow(icon: Icons.notes, label: 'ملاحظات', value: w.notes),

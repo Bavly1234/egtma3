@@ -1,6 +1,7 @@
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/utils/arabic_text.dart';
+import '../../../core/utils/birth_date.dart';
 import '../../../core/utils/phone.dart';
 
 /// A member of the women's meeting.
@@ -17,6 +18,9 @@ class Woman {
     required this.phone,
     required this.dateOfBirth,
     required this.active,
+    this.landline = '',
+    this.birthDay,
+    this.birthMonth,
     this.notes = '',
     this.consecutiveAbsences = 0,
     this.totalPresent = 0,
@@ -38,8 +42,16 @@ class Woman {
   final String streetName;
   final String address;
   final String phone; // normalised
+  /// Full date — only when the year is known.
   final DateTime? dateOfBirth;
+
+  /// Day / month of the birthday (year often unknown). Month may be alone.
+  final int? birthDay;
+  final int? birthMonth;
   final bool active;
+
+  /// Home landline, e.g. 035916219.
+  final String landline;
   final String notes;
 
   // Server-maintained summary (Cloud Functions only).
@@ -58,6 +70,13 @@ class Woman {
   final DateTime? updatedAt;
 
   bool get hasPhone => phone.isNotEmpty;
+  bool get hasLandline => landline.isNotEmpty;
+
+  BirthDate get birth => BirthDate(
+        day: dateOfBirth?.day ?? birthDay,
+        month: dateOfBirth?.month ?? birthMonth,
+        year: dateOfBirth?.year,
+      );
   bool get hasWhatsApp => PhoneUtils.isValidMobile(phone);
 
   double? get attendanceRate {
@@ -73,6 +92,9 @@ class Woman {
         address: (m['address'] as String?) ?? '',
         phone: (m['phone'] as String?) ?? '',
         dateOfBirth: tsToDate(m['dateOfBirth']),
+        birthDay: (m['birthDay'] as num?)?.toInt(),
+        birthMonth: (m['birthMonth'] as num?)?.toInt(),
+        landline: (m['landline'] as String?) ?? '',
         active: (m['active'] as bool?) ?? true,
         notes: (m['notes'] as String?) ?? '',
         consecutiveAbsences: (m['consecutiveAbsences'] as num?)?.toInt() ?? 0,
@@ -98,7 +120,8 @@ class WomanDraft {
     required this.streetName,
     required this.address,
     required this.phone,
-    required     this.dateOfBirth,
+    this.birth = BirthDate.empty,
+    this.landline = '',
     this.active = true,
     this.notes = '',
   });
@@ -106,27 +129,28 @@ class WomanDraft {
   final String fullName;
   final String streetName;
   final String address;
-  final String phone; // normalised
-  final DateTime? dateOfBirth;
+  final String phone; // normalised mobile
+  final String landline;
+  final BirthDate birth;
   final bool active;
   final String notes;
 
   /// Firestore fields derived from the draft. `streetId` is supplied by the
   /// street repository so street names stay consistent.
   Map<String, dynamic> toFields(String streetId) {
-    final dob = dateOfBirth;
     return {
       'fullName': fullName.trim(),
       'nameNormalized': ArabicText.normalizeName(fullName),
       'searchKeywords': ArabicText.searchKeywords(
-          [fullName, streetName, address, phone]),
+          [fullName, streetName, address, phone, landline]),
       'streetId': streetId,
       'streetName': streetName.trim(),
       'address': address.trim(),
       'phone': phone,
-      'dateOfBirth': dob,
-      'birthMonth': dob?.month,
-      'birthDay': dob?.day,
+      'landline': landline,
+      'dateOfBirth': birth.full,
+      'birthMonth': birth.month,
+      'birthDay': birth.day,
       'active': active,
       'notes': notes.trim(),
     };

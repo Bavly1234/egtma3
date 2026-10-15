@@ -1,3 +1,4 @@
+import 'package:egtma3/core/utils/birth_date.dart';
 import 'package:egtma3/features/excel/data/excel_export_service.dart';
 import 'package:egtma3/features/excel/data/excel_import_service.dart';
 import 'package:egtma3/features/excel/domain/duplicate_detector.dart';
@@ -39,7 +40,7 @@ void main() {
       expect(parsed.draft!.phone, '01012345678');
       expect(parsed.draft!.streetName, 'شارع مار جرجس');
       expect(parsed.draft!.address, '10 شارع مار جرجس');
-      expect(parsed.draft!.dateOfBirth, DateTime(1970, 3, 15));
+      expect(parsed.draft!.birth.full, DateTime(1970, 3, 15));
     });
 
     test('template headers survive a real .xlsx round trip', () {
@@ -85,11 +86,11 @@ void main() {
       ], cols, now: now);
       expect(rows.single.isValid, isTrue);
       expect(rows.single.draft!.phone, '01012345678');
-      expect(rows.single.draft!.dateOfBirth, DateTime(1970, 3, 15));
+      expect(rows.single.draft!.birth.full, DateTime(1970, 3, 15));
       expect(rows.single.rowNumber, 2);
     });
 
-    test('invalid rows collect Arabic errors', () {
+    test('only a missing name or an unreadable date make a row invalid', () {
       final rows = ImportParser.parse([
         header,
         ['', 'ش', 'ع', '123', '31/02/1970'],
@@ -97,10 +98,18 @@ void main() {
       ], cols, now: now);
       expect(rows[0].isValid, isFalse);
       expect(rows[0].errors, contains('الاسم مطلوب'));
-      expect(rows[0].errors, contains('رقم التليفون غير صحيح'));
-      expect(rows[0].errors, contains('تاريخ الميلاد غير مفهوم'));
-      expect(rows[1].errors, contains('الشارع مطلوب'));
-      expect(rows[1].errors, contains('تاريخ الميلاد غير منطقي'));
+      expect(rows[0].errors.any((e) => e.startsWith('تاريخ الميلاد غير مفهوم')), isTrue);
+      // A future year is impossible → unreadable.
+      expect(rows[1].errors.any((e) => e.startsWith('تاريخ الميلاد غير مفهوم')), isTrue);
+    });
+
+    test('empty street/address/phone/date are allowed (name is enough)', () {
+      final row = ImportParser.parse([header, ['سعاد جرجس', null, null, null, null]],
+              cols, now: now)
+          .single;
+      expect(row.isValid, isTrue);
+      expect(row.draft!.streetName, kNoStreetName);
+      expect(row.draft!.birth.isEmpty, isTrue);
     });
 
     test('blank rows are skipped', () {
@@ -119,7 +128,7 @@ void main() {
           name: 'السيدة مريم أحمد',
           phone: '01012345678',
           address: '10 شارع مار جرجس',
-          dateOfBirth: DateTime(1970, 3, 15)),
+          birth: const BirthDate(day: 15, month: 3, year: 1970)),
     ];
 
     test('same person with differently formatted phone is a duplicate', () {

@@ -25,17 +25,17 @@ final _birthdaysProvider =
     repo.birthdays(user, next.month),
   ]);
   final all = {for (final w in [...lists[0], ...lists[1]]) w.id: w}.values
-      .where((w) => w.dateOfBirth != null)
+      .where((w) => w.birth.anchor != null)
       .toList();
-  final today = all.where((w) => BirthdayRules.isBirthdayOn(w.dateOfBirth!, now)).toList();
+  final today = all.where((w) => BirthdayRules.isBirthdayOn(w.birth.anchor!, now)).toList();
   final upcoming = all
       .where((w) {
-        final d = BirthdayRules.daysUntil(w.dateOfBirth!, now);
+        final d = BirthdayRules.daysUntil(w.birth.anchor!, now);
         return d > 0 && d <= 30;
       })
       .toList()
-    ..sort((a, b) => BirthdayRules.daysUntil(a.dateOfBirth!, now)
-        .compareTo(BirthdayRules.daysUntil(b.dateOfBirth!, now)));
+    ..sort((a, b) => BirthdayRules.daysUntil(a.birth.anchor!, now)
+        .compareTo(BirthdayRules.daysUntil(b.birth.anchor!, now)));
   return (today, upcoming);
 });
 
@@ -77,8 +77,8 @@ class _BirthdayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final next = BirthdayRules.nextBirthday(w.dateOfBirth!, now);
-    final age = Dates.ageOn(w.dateOfBirth!, next);
+    final next = BirthdayRules.nextBirthday(w.birth.anchor!, now);
+    final age = w.dateOfBirth == null ? null : Dates.ageOn(w.dateOfBirth!, next);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Card(
@@ -94,11 +94,11 @@ class _BirthdayCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               today
-                  ? 'تتم $age سنة اليوم'
-                  : '${Dates.weekdayAr(next)} ${Dates.display(next)} — تتم $age سنة',
+                  ? (age == null ? 'عيد ميلادها النهارده 🎂' : 'تتم $age سنة اليوم')
+                  : '${Dates.weekdayAr(next)} ${Dates.display(next)}${age == null ? '' : ' — تتم $age سنة'}',
               style: const TextStyle(fontSize: 17),
             ),
-            Text('تاريخ الميلاد: ${Dates.display(w.dateOfBirth)}  •  ${w.streetName}',
+            Text('عيد الميلاد: ${w.birth.display}  •  ${w.streetName}',
                 style: const TextStyle(fontSize: 16, color: AppColors.textMuted)),
             if (w.hasPhone) ...[
               const SizedBox(height: 10),

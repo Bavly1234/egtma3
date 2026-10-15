@@ -1,10 +1,23 @@
 import '../../../core/utils/arabic_text.dart';
-import '../../../core/utils/dates.dart';
+import '../../../core/utils/birth_date.dart';
 import '../../../core/utils/phone.dart';
 import '../../women/domain/woman.dart';
 import '../../women/domain/woman_validator.dart';
 
-enum ImportField { name, street, address, phone, dateOfBirth }
+enum ImportField { name, street, address, phone, dateOfBirth, landline }
+
+/// Columns that must exist in the header row. The landline column is
+/// optional (landlines are usually written inside the phone cell).
+const kRequiredImportFields = [
+  ImportField.name,
+  ImportField.street,
+  ImportField.address,
+  ImportField.phone,
+  ImportField.dateOfBirth,
+];
+
+/// Street used when the sheet leaves it empty, so the father can fix it.
+const kNoStreetName = 'بدون شارع';
 
 /// Header aliases (English + Arabic). Compared after Arabic normalisation.
 /// Matches the official template exactly:
@@ -23,7 +36,11 @@ const Map<ImportField, List<String>> kImportAliases = {
   ],
   ImportField.dateOfBirth: [
     'date of birth', 'dob', 'birth date', 'birthdate', 'تاريخ الميلاد',
-    'الميلاد', 'تاريخ الميلاد'
+    'الميلاد', 'تاريخ الميلاد', 'عيد الميلاد'
+  ],
+  ImportField.landline: [
+    'landline', 'home phone', 'التليفون الارضي', 'تليفون ارضي', 'الارضي',
+    'رقم الارضي', 'التليفون الأرضي', 'تليفون أرضي'
   ],
 };
 
@@ -39,6 +56,7 @@ class ColumnDetection {
     ImportField.address: 'العنوان',
     ImportField.phone: 'التليفون',
     ImportField.dateOfBirth: 'تاريخ الميلاد',
+    ImportField.landline: 'التليفون الأرضي',
   };
 
   static ColumnDetection detect(List<Object?> headerRow) {
@@ -46,13 +64,22 @@ class ColumnDetection {
         .map((h) => ArabicText.normalize(h?.toString() ?? '').replaceAll('_', ' '))
         .toList();
     final indexes = <ImportField, int>{};
-    for (final entry in kImportAliases.entries) {
-      final aliases = entry.value.map(ArabicText.normalize).toSet();
-      final i = normalized.indexWhere(aliases.contains);
-      if (i >= 0) indexes[entry.key] = i;
+    // Landline first, so "التليفون الأرضي" isn't taken as the mobile column.
+    final order = [
+      ImportField.landline,
+      ...ImportField.values.where((f) => f != ImportField.landline),
+    ];
+    for (final f in order) {
+      final aliases = kImportAliases[f]!.map(ArabicText.normalize).toSet();
+      for (var j = 0; j < normalized.length; j++) {
+        if (aliases.contains(normalized[j]) && !indexes.containsValue(j)) {
+          indexes[f] = j;
+          break;
+        }
+      }
     }
     final missing =
-        ImportField.values.where((f) => !indexes.containsKey(f)).toList();
+        kRequiredImportFields.where((f) => !indexes.containsKey(f)).toList();
     return ColumnDetection(indexes, missing);
   }
 }
@@ -87,31 +114,37 @@ abstract final class ImportParser {
     DateTime? now,
   }) {
     final out = <ImportRow>[];
-    String cell(List<Object?> r, ImportField f) {
-      final i = cols.indexes[f]!;
-      return i < r.length ? (r[i]?.toString().trim() ?? '') : '';
+    Object? raw(List<Object?> r, ImportField f) {
+      final i = cols.indexes[f];
+      return i == null || i >= r.length ? null : r[i];
     }
+
+    String text(List<Object?> r, ImportField f) =>
+        (raw(r, f)?.toString() ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
 
     for (var i = 1; i < rows.length; i++) {
       final r = rows[i];
       if (r.every((c) => (c?.toString().trim() ?? '').isEmpty)) continue;
-      final name = cell(r, ImportField.name);
-      final street = cell(r, ImportField.street);
-      final address = cell(r, ImportField.address);
-      final phoneRaw = cell(r, ImportField.phone);
-      final dobIdx = cols.indexes[ImportField.dateOfBirth]!;
-      final dobRaw = dobIdx < r.length ? r[dobIdx] : null;
-      final dob = Dates.parseFlexible(dobRaw);
+      final name = text(r, ImportField.name);
+      final street = text(r, ImportField.street);
+      final address = text(r, ImportField.address);
+
+      // Phones: "01222545908/5916219" → mobile + landline; extra numbers
+      // and words ("إيناس بنتها") go to the notes so nothing is lost.
+      final split = PhoneUtils.split(raw(r, ImportField.phone));
+      final landSplit = PhoneUtils.split(raw(r, ImportField.landline));
+      final mobile = split.mobile ?? landSplit.mobile ?? '';
+      final landline = landSplit.landline ?? split.landline ?? '';
+      final notes = [split.noteText, landSplit.noteText]
+          .where((t) => t.isNotEmpty)
+          .join(' — ');
+
+      final dobRaw = raw(r, ImportField.dateOfBirth);
+      final birth = BirthDate.parse(dobRaw, now: now);
 
       final errors = <String>[
         ?WomanValidator.name(name),
-        ?WomanValidator.street(street),
-        ?WomanValidator.address(address),
-        ?WomanValidator.phone(phoneRaw),
-        if (dobRaw != null && dobRaw.toString().trim().isNotEmpty && dob == null)
-          'تاريخ الميلاد غير مفهوم'
-        else
-          ?WomanValidator.dateOfBirth(dob, now: now),
+        if (birth == null) 'تاريخ الميلاد غير مفهوم: "${dobRaw.toString().trim()}"',
       ];
 
       out.add(ImportRow(
@@ -122,10 +155,12 @@ abstract final class ImportParser {
             ? null
             : WomanDraft(
                 fullName: name,
-                streetName: street,
+                streetName: street.isEmpty ? kNoStreetName : street,
                 address: address,
-                phone: PhoneUtils.normalize(phoneRaw),
-                dateOfBirth: dob,
+                phone: mobile,
+                landline: landline,
+                birth: birth!,
+                notes: notes,
               ),
       ));
     }

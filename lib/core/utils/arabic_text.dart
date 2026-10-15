@@ -3,7 +3,7 @@ abstract final class ArabicText {
   static final _diacritics = RegExp('[ً-ٰٟـ]');
   static final _spaces = RegExp(r'\s+');
   static final _punct = RegExp(r'[^\p{L}\p{N}\s]', unicode: true);
-  static const _honorifics = {'السيدة', 'السيده', 'ست', 'مدام', 'الست'};
+  static const _honorifics = {'السيدة', 'السيده', 'ست', 'مدام', 'الست', 'ت', 'تاسوني', 'طنط'};
 
   /// Removes diacritics/tatweel, unifies alef/yaa/taa-marbuta forms,
   /// converts Arabic-Indic digits, lower-cases latin and collapses spaces.

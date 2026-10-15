@@ -1,4 +1,3 @@
-import '../../../core/utils/dates.dart';
 import '../../../core/utils/phone.dart';
 
 /// Field validators shared by the woman form and the Excel importer.
@@ -25,13 +24,5 @@ abstract final class WomanValidator {
     return PhoneUtils.isValid(PhoneUtils.normalize(raw))
         ? null
         : 'رقم التليفون غير صحيح';
-  }
-
-  static String? dateOfBirth(DateTime? d, {DateTime? now}) {
-    if (d == null) return 'تاريخ الميلاد مطلوب';
-    if (!Dates.isPlausibleBirthDate(d, now ?? DateTime.now())) {
-      return 'تاريخ الميلاد غير منطقي';
-    }
-    return null;
   }
 }

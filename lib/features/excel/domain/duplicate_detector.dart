@@ -1,5 +1,5 @@
 import '../../../core/utils/arabic_text.dart';
-import '../../../core/utils/dates.dart';
+import '../../../core/utils/birth_date.dart';
 import 'import_models.dart';
 
 /// Identity of an existing (or already-accepted) woman for duplicate checks.
@@ -8,17 +8,23 @@ class PersonIdentity {
     required this.name,
     required this.phone,
     required this.address,
-    required this.dateOfBirth,
+    this.birth = BirthDate.empty,
+    this.landline = '',
   });
 
   final String name;
-  final String phone; // normalised
+  final String phone; // normalised mobile
+  final String landline;
   final String address;
-  final DateTime? dateOfBirth;
+  final BirthDate birth;
 
   String get nameKey => ArabicText.normalizeName(name);
   String get addressKey => ArabicText.normalize(address);
-  String? get dobKey => dateOfBirth == null ? null : Dates.dayId(dateOfBirth!);
+
+  /// Day + month only (the year is usually unknown); a month alone is too
+  /// weak to call two people the same.
+  String? get dobKey =>
+      birth.hasDayMonth ? '${birth.day}-${birth.month}' : null;
 }
 
 /// Multi-field duplicate detection (Rule H).
@@ -31,7 +37,8 @@ class PersonIdentity {
 abstract final class DuplicateDetector {
   static String? matchReason(PersonIdentity a, PersonIdentity b) {
     final sameName = a.nameKey.isNotEmpty && a.nameKey == b.nameKey;
-    final samePhone = a.phone.isNotEmpty && a.phone == b.phone;
+    final samePhone = (a.phone.isNotEmpty && a.phone == b.phone) ||
+        (a.landline.isNotEmpty && a.landline == b.landline);
     final sameDob = a.dobKey != null && a.dobKey == b.dobKey;
     final sameAddress = a.addressKey.isNotEmpty && a.addressKey == b.addressKey;
 
@@ -55,7 +62,8 @@ abstract final class DuplicateDetector {
         name: d.fullName,
         phone: d.phone,
         address: d.address,
-        dateOfBirth: d.dateOfBirth,
+        birth: d.birth,
+        landline: d.landline,
       );
       String? reason;
       for (final e in existing) {

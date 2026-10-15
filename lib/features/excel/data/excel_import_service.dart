@@ -83,6 +83,7 @@ class ExcelImportService {
       final drafts = parsed.where((r) => r.isValid).map((r) => r.draft!);
       final existing = await _women.identitiesMatching(
         phones: drafts.map((d) => d.phone),
+        landlines: drafts.map((d) => d.landline),
         normalizedNames: drafts.map((d) => ArabicText.normalizeName(d.fullName)),
       );
       DuplicateDetector.classify(parsed, existing);

@@ -265,6 +265,7 @@ class WomenRepository {
   Future<List<PersonIdentity>> identitiesMatching({
     required Iterable<String> phones,
     required Iterable<String> normalizedNames,
+    Iterable<String> landlines = const [],
   }) async {
     final out = <String, PersonIdentity>{};
     Future<void> run(String field, List<String> values) async {
@@ -278,12 +279,14 @@ class WomenRepository {
               name: w.fullName,
               phone: w.phone,
               address: w.address,
-              dateOfBirth: w.dateOfBirth);
+              birth: w.birth,
+              landline: w.landline);
         }
       }
     }
 
     await run('phone', phones.where((p) => p.isNotEmpty).toSet().toList());
+    await run('landline', landlines.where((p) => p.isNotEmpty).toSet().toList());
     await run('nameNormalized',
         normalizedNames.where((n) => n.isNotEmpty).toSet().toList());
     return out.values.toList();

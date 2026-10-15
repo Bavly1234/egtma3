@@ -115,7 +115,7 @@ class ReminderService {
       AppUser user, List<Woman> women, DateTime now) async {
     if (!user.prefs.birthday) return;
     for (final w in women) {
-      if (w.dateOfBirth == null || !BirthdayRules.isBirthdayOn(w.dateOfBirth!, now)) {
+      if (w.birth.anchor == null || !BirthdayRules.isBirthdayOn(w.birth.anchor!, now)) {
         continue;
       }
       await _writer.createOnce(

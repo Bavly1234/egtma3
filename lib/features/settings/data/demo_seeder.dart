@@ -6,6 +6,7 @@ import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
 import '../../../core/utils/arabic_text.dart';
+import '../../../core/utils/birth_date.dart';
 import '../../../core/utils/dates.dart';
 import '../../attendance/data/attendance_repository.dart';
 import '../../auth/domain/app_user.dart';
@@ -54,7 +55,7 @@ class DemoSeeder {
           streetName: street,
           address: '${10 + i} $street',
           phone: '01000000${100 + i}',
-          dateOfBirth: dob,
+          birth: BirthDate(day: dob.day, month: dob.month, year: dob.year),
         );
         final ref = _db.collection(FsPaths.women).doc();
         final streetId = Street.idFor(street);

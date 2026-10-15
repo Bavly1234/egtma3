@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:egtma3/core/constants/enums.dart';
 import 'package:egtma3/core/constants/firestore_paths.dart';
+import 'package:egtma3/core/utils/birth_date.dart';
 import 'package:egtma3/features/attendance/data/attendance_repository.dart';
 import 'package:egtma3/features/audit/data/audit_repository.dart';
 import 'package:egtma3/features/auth/domain/app_user.dart';
@@ -38,7 +39,7 @@ void main() {
         streetName: street,
         address: '10 $street',
         phone: '01012345678',
-        dateOfBirth: DateTime(1970, 3, 15),
+        birth: const BirthDate(day: 15, month: 3, year: 1970),
       ),
       father,
     );
@@ -58,7 +59,7 @@ void main() {
             streetName: 'شارع النصر الجديد',
             address: a.address,
             phone: a.phone,
-            dateOfBirth: a.dateOfBirth),
+            birth: a.birth),
         father);
     final aAfter = (await db.collection(FsPaths.women).doc(a.id).get()).get('streetId');
     expect(b.streetId, a.streetId);

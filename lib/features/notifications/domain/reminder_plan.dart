@@ -123,12 +123,12 @@ abstract final class ReminderPlanner {
     }
     if (p.birthday) {
       var n = 0;
-      final sorted = women.where((w) => w.active && w.dateOfBirth != null).toList()
-        ..sort((a, b) => BirthdayRules.daysUntil(a.dateOfBirth!, now)
-            .compareTo(BirthdayRules.daysUntil(b.dateOfBirth!, now)));
+      final sorted = women.where((w) => w.active && w.birth.anchor != null).toList()
+        ..sort((a, b) => BirthdayRules.daysUntil(a.birth.anchor!, now)
+            .compareTo(BirthdayRules.daysUntil(b.birth.anchor!, now)));
       for (final w in sorted) {
         if (n >= ReminderIds.maxBirthdays) break;
-        final day = BirthdayRules.nextBirthday(w.dateOfBirth!, now);
+        final day = BirthdayRules.nextBirthday(w.birth.anchor!, now);
         final at = DateTime(day.year, day.month, day.day, birthdayHour);
         if (!at.isAfter(now) ||
             at.difference(now).inDays > birthdayHorizonDays) {

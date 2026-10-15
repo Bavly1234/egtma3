@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/dates.dart';
 import '../data/excel_import_service.dart';
 import '../domain/import_models.dart';
 
@@ -43,8 +42,7 @@ class _ImportPreviewViewState extends State<ImportPreviewView> {
             leading: CircleAvatar(child: Text('${r.rowNumber}')),
             title: Text(r.rawName.isEmpty ? '(بدون اسم)' : r.rawName),
             subtitle: Text(switch (r.category) {
-              RowCategory.valid =>
-                '${r.draft!.streetName} • ${r.draft!.phone} • ${Dates.display(r.draft!.dateOfBirth)}',
+              RowCategory.valid => _describe(r),
               RowCategory.duplicate => r.duplicateReason ?? '',
               RowCategory.invalid => r.errors.join('، '),
             }),
@@ -62,4 +60,16 @@ class _ImportPreviewViewState extends State<ImportPreviewView> {
         side: BorderSide(color: color),
         onSelected: (_) => setState(() => _tab = c),
       );
+}
+
+/// How a valid row was understood, one fact per line.
+String _describe(ImportRow r) {
+  final d = r.draft!;
+  return [
+    'الشارع: ${d.streetName}',
+    if (d.phone.isNotEmpty) 'موبايل: ${d.phone}',
+    if (d.landline.isNotEmpty) 'أرضي: ${d.landline}',
+    if (!d.birth.isEmpty) 'عيد الميلاد: ${d.birth.display}',
+    if (d.notes.isNotEmpty) 'ملاحظات: ${d.notes}',
+  ].join('\n');
 }
