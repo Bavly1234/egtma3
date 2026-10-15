@@ -31,15 +31,11 @@ class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.size = 80});
   final double size;
 
+  /// The app icon (three women under a Coptic cross), drawn by
+  /// tool/make_icon.py.
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: AppColors.goldLight,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.gold, width: 3),
-        ),
-        child: Icon(Icons.church, size: size * .55, color: AppColors.primary),
+  Widget build(BuildContext context) => ClipOval(
+        child: Image.asset('assets/icon/app_icon.png',
+            width: size, height: size, fit: BoxFit.cover),
       );
 }
