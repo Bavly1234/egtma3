@@ -308,3 +308,24 @@ git-ignored) and reference them in `android/app/build.gradle.kts`.
   app. Never add service-account keys to the repository.
 - Logs never include names, phones or addresses. Crashlytics only collects in
   release builds.
+
+---
+
+## Updating the Android app (without reinstalling)
+
+Phones install a new APK **over** the old one and keep all data, as long as
+every APK is signed with the **same release key**:
+`android/keys/egtma3-release.jks` + `android/key.properties` (both git-ignored,
+backed up in `EGTMA3-SIGNING-KEY-BACKUP.zip`). **Never lose this key** —
+without it, every phone would have to uninstall and reinstall.
+
+```bash
+bash tool/release.sh build          # raises the version, builds the signed APK
+# upload build/app/outputs/flutter-apk/app-release.apk to Google Drive,
+# share "anyone with the link", copy the link, then:
+bash tool/release.sh publish "<drive link>" "what changed"
+```
+
+`publish` writes `app_update.json` on the website. Every phone checks it on
+launch and shows "فيه نسخة جديدة" with a button that opens the download.
+(The free Firebase plan does not allow hosting APK files, hence Google Drive.)

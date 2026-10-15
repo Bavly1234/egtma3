@@ -58,3 +58,9 @@ functions/.env
 key.properties
 service-account*.json
 **/serviceAccountKey.json
+
+# Release APKs
+*.apk
+
+# Signing key backup — keep OUT of git, store safely
+*SIGNING-KEY-BACKUP*.zip

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/routes.dart';
 import '../../../core/services/local_notifications.dart';
+import '../../../core/services/update_checker.dart';
 import '../../attendance/data/auto_absence_service.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../notifications/data/reminder_service.dart';
@@ -104,6 +105,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
       ref.read(reminderServiceProvider).start(user);
       // Wednesday 9pm: mark everyone not marked present as absent.
       ref.read(autoAbsenceServiceProvider).runIfDue(user);
+      // New APK published? Offer it (Android only, once per launch).
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => mounted ? UpdateChecker.checkOnce(context) : null);
     }
     final tabs = (user?.isFather ?? false) ? _fatherTabs : _servantTabs;
     final current =
