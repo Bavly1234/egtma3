@@ -8,6 +8,7 @@ import '../../audit/domain/audit_entry.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
 import '../../notifications/data/reminder_service.dart';
+import '../../statistics/data/stats_maintenance.dart';
 import '../data/demo_seeder.dart';
 import '../data/settings_repository.dart';
 
@@ -170,11 +171,35 @@ class _ChurchSettings extends ConsumerWidget {
                 if (!ok || !context.mounted) return;
                 await runGuarded(context, () async {
                   final r = await ref.read(demoSeederProvider).remove();
+                  // Totals must not keep counting the deleted test women.
+                  await ref.read(statsMaintenanceProvider).rebuild();
                   if (context.mounted) AppToast.success(context, r);
                 });
               },
               icon: const Icon(Icons.delete_sweep),
               label: const Text('حذف البيانات التجريبية'),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+                'لو الإحصائيات بتعرض أرقام لسيدات اتمسحوا، اضغطي هنا '
+                'وهيتحسب كل حاجة من جديد من البيانات الموجودة فعلاً.',
+                style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () async {
+                final ok = await confirmAction(context,
+                    title: 'إعادة حساب الإحصائيات',
+                    message: 'هيتحسب الحضور والإحصائيات من جديد، وهيتشال أي '
+                        'سجل حضور أو افتقاد لسيدة مش موجودة في البرنامج.',
+                    confirmLabel: 'ابدأ');
+                if (!ok || !context.mounted) return;
+                await runGuarded(context, () async {
+                  final r = await ref.read(statsMaintenanceProvider).rebuild();
+                  if (context.mounted) AppToast.success(context, r);
+                });
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة حساب الإحصائيات'),
             ),
           ]),
         ),
