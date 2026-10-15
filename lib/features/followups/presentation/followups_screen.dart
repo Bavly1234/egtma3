@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/states.dart';
-import '../../streets/data/street_repository.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../data/follow_up_repository.dart';
 import 'suggestion_card.dart';
@@ -18,11 +18,15 @@ class FollowUpsScreen extends ConsumerStatefulWidget {
 
 class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
   bool _activeOnly = true;
+
+  /// Servants start on "the follow-ups of my streets"; the father on all.
+  bool? _mineOnly;
   String? _servantId;
-  String? _streetId;
 
   @override
   Widget build(BuildContext context) {
+    final me = ref.watch(requireUserProvider);
+    _mineOnly ??= !me.isFather;
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -43,20 +47,33 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
         body: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              ChoiceChip(
-                label: const Text('المطلوب الآن'),
-                selected: _activeOnly,
-                onSelected: (_) => setState(() => _activeOnly = true),
-              ),
-              ChoiceChip(
-                label: const Text('السجل الكامل'),
-                selected: !_activeOnly,
-                onSelected: (_) => setState(() => _activeOnly = false),
-              ),
-              _servantFilter(),
-              _streetFilter(),
-            ]),
+            child: me.isFather
+                ? _servantFilter()
+                : SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                          value: true,
+                          icon: Icon(Icons.signpost),
+                          label: Text('المطلوب منكِ')),
+                      ButtonSegment(
+                          value: false,
+                          icon: Icon(Icons.groups),
+                          label: Text('الكل')),
+                    ],
+                    selected: {_mineOnly!},
+                    onSelectionChanged: (v) =>
+                        setState(() => _mineOnly = v.first),
+                  ),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _activeOnly = !_activeOnly),
+              icon: Icon(_activeOnly ? Icons.history : Icons.pending_actions),
+              label: Text(_activeOnly
+                  ? 'عرض الافتقاد اللي اتعمل قبل كده'
+                  : 'رجوع للافتقاد المطلوب'),
+            ),
           ),
           Expanded(
             child: TabBarView(children: [
@@ -71,9 +88,10 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
 
   Widget _servantFilter() {
     final servants = ref.watch(activeServantsProvider).value ?? const [];
-    return DropdownButton<String?>(
-      value: _servantId,
-      hint: const Text('كل الخادمات'),
+    return DropdownButtonFormField<String?>(
+      initialValue: _servantId,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'الخادمة'),
       items: [
         const DropdownMenuItem(value: null, child: Text('كل الخادمات')),
         for (final s in servants) DropdownMenuItem(value: s.id, child: Text(s.name)),
@@ -82,25 +100,12 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
     );
   }
 
-  Widget _streetFilter() {
-    final streets = ref.watch(streetsProvider).value ?? const [];
-    return DropdownButton<String?>(
-      value: _streetId,
-      hint: const Text('كل الشوارع'),
-      items: [
-        const DropdownMenuItem(value: null, child: Text('كل الشوارع')),
-        for (final s in streets) DropdownMenuItem(value: s.id, child: Text(s.name)),
-      ],
-      onChanged: (v) => setState(() => _streetId = v),
-    );
-  }
-
   Widget _list(SuggestionType type) {
+    final me = ref.read(requireUserProvider);
     final q = SuggestionQuery(
       type: type,
       activeOnly: _activeOnly,
-      servantId: _servantId,
-      streetId: _streetId,
+      servantId: me.isFather ? _servantId : (_mineOnly! ? me.id : null),
     );
     return AsyncBody(
       value: ref.watch(suggestionsProvider(q)),
@@ -108,7 +113,7 @@ class _FollowUpsScreenState extends ConsumerState<FollowUpsScreen> {
       builder: (items) => items.isEmpty
           ? EmptyState(
               icon: Icons.celebration,
-              title: _activeOnly ? 'لا يوجد افتقاد مطلوب الآن' : 'لا يوجد سجل',
+              title: _activeOnly ? 'مفيش افتقاد مطلوب دلوقتي 👍' : 'لا يوجد سجل',
               message: _activeOnly
                   ? 'سيظهر هنا تلقائياً عند غياب سيدة مرتين متتاليتين أو أكثر.'
                   : null,

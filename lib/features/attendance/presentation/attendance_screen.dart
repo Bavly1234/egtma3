@@ -13,7 +13,6 @@ import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../streets/data/street_repository.dart';
 import '../../../core/services/sync_status.dart';
-import '../../users/data/users_repository.dart';
 import '../../women/domain/woman.dart';
 import '../data/auto_absence_service.dart';
 import 'attendance_controller.dart';
@@ -116,7 +115,7 @@ class _Header extends ConsumerWidget {
     final filter = ref.watch(attendanceFilterProvider);
     final absentOnly = ref.watch(absentOnlyProvider);
     final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants = ref.watch(activeServantsProvider).value ?? const [];
+    final me = ref.watch(requireUserProvider);
     final notifier = ref.read(attendanceFilterProvider.notifier);
 
     return Material(
@@ -144,7 +143,7 @@ class _Header extends ConsumerWidget {
           TextField(
             onChanged: (q) => notifier.set(filter.copyWith(query: q)),
             decoration: const InputDecoration(
-              hintText: 'بحث بالاسم',
+              hintText: 'اكتبي اسم السيدة',
               prefixIcon: Icon(Icons.search),
               contentPadding: EdgeInsets.symmetric(vertical: 12),
             ),
@@ -156,7 +155,7 @@ class _Header extends ConsumerWidget {
                 initialValue: filter.streetId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                    labelText: 'الشارع',
+                    labelText: 'اختاري الشارع',
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
                 items: [
@@ -168,27 +167,20 @@ class _Header extends ConsumerWidget {
                     notifier.set(filter.copyWith(streetId: () => v)),
               ),
             ),
-            ...[
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String?>(
-                  initialValue: filter.servantId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'خادمة الشارع',
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('الكل')),
-                    for (final s in servants)
-                      DropdownMenuItem(value: s.id, child: Text(s.name)),
-                  ],
-                  onChanged: (v) =>
-                      notifier.set(filter.copyWith(servantId: () => v)),
-                ),
-              ),
-            ],
           ]),
+          if (!me.isFather) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilterChip(
+                avatar: const Icon(Icons.signpost, size: 20),
+                label: const Text('شوارعي بس'),
+                selected: filter.servantId == me.id,
+                onSelected: (on) => notifier.set(
+                    filter.copyWith(servantId: () => on ? me.id : null)),
+              ),
+            ),
+          ],
         ]),
       ),
     );

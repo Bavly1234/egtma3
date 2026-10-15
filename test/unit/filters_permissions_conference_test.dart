@@ -88,7 +88,6 @@ void main() {
         Routes.womanNew,
         Routes.conferenceNew,
         Routes.statsServants,
-        Routes.statsWomen,
         Routes.monthlyReport,
         Routes.import,
         Routes.export,

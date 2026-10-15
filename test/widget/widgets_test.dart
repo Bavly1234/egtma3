@@ -7,6 +7,8 @@ import 'package:egtma3/features/auth/data/auth_repository.dart';
 import 'package:egtma3/features/auth/domain/app_user.dart';
 import 'package:egtma3/features/streets/data/street_repository.dart';
 import 'package:egtma3/features/women/domain/woman.dart';
+import 'package:egtma3/core/services/firebase_providers.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,8 +69,15 @@ void main() {
   });
 
   testWidgets('attendance: present-only marking, summary updates', (t) async {
+    // A phone-sized screen so both rows are visible below the header.
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
     late _RecordingActions actions;
     await t.pumpWidget(wrap(const AttendanceScreen(), [
+      // In-memory database: the screen's Wednesday-9pm auto-absence step
+      // must not touch real Firebase (it runs on any day after the cutoff).
+      firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
       requireUserProvider.overrideWithValue(servant),
       currentUserProvider.overrideWith((ref) => Stream.value(servant)),
       streetsProvider.overrideWith((ref) => Stream.value(const [])),

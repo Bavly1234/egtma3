@@ -26,7 +26,6 @@ import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/statistics/presentation/father_stats_screen.dart';
 import '../../features/statistics/presentation/servants_stats_screen.dart';
-import '../../features/statistics/presentation/women_stats_screen.dart';
 import '../../features/statistics/presentation/monthly_report_screen.dart';
 import '../../features/streets/presentation/streets_screen.dart';
 import '../../features/users/presentation/users_screen.dart';
@@ -113,7 +112,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           (s) => FollowUpHistoryScreen(womanId: s.pathParameters['id']!)),
       r(Routes.attendanceHistory, (_) => const AttendanceHistoryScreen()),
       r(Routes.statsServants, (_) => const ServantsStatsScreen()),
-      r(Routes.statsWomen, (_) => const WomenStatsScreen()),
       r(Routes.streets, (_) => const StreetsScreen()),
       r(Routes.conferences, (_) => const ConferencesScreen()),
       r(Routes.conferenceNew, (_) => const CreateConferenceScreen()),

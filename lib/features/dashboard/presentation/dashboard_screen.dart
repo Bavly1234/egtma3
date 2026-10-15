@@ -7,15 +7,21 @@ import '../../../core/services/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
-import '../../../core/widgets/states.dart';
+import '../../../core/widgets/simple_charts.dart';
+import '../../attendance/data/attendance_repository.dart';
 import '../../attendance/presentation/attendance_controller.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
+import '../../followups/data/follow_up_repository.dart';
 import '../../notifications/data/notification_repository.dart';
-import '../../statistics/domain/stats_models.dart';
+import '../../streets/data/street_repository.dart';
+import '../../users/data/users_repository.dart';
 import '../../verse/presentation/verse_card.dart';
 import 'dashboard_providers.dart';
 
+/// Home page. Kept deliberately short for older users: the meeting result
+/// as a picture, a few big numbers, and big buttons for what to do next.
+/// The father sees everyone; a servant sees only her own streets.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -46,9 +52,10 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             _Greeting(user: user),
             const SizedBox(height: 16),
-            const VerseCard(),
+            if (user.isFather) _FatherBody(user: user) else _ServantBody(user: user),
             const SizedBox(height: 16),
-            if (user.isFather) const _FatherBody() else const _ServantBody(),
+            const VerseCard(),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -72,223 +79,213 @@ class _Greeting extends ConsumerWidget {
   }
 }
 
-/// Cards shared by both roles, in priority order.
-List<Widget> _priorityCards(BuildContext context, WidgetRef ref,
-    OverviewStats? o) {
-  final phone = ref.watch(activePhoneSuggestionsProvider).value?.length;
-  final home = ref.watch(activeHomeSuggestionsProvider).value?.length;
-  final now = ref.watch(clockProvider)();
-  final meeting = Dates.currentOrLastMeeting(now);
-  final isToday = Dates.isMeetingDay(now);
-  final conf = ref.watch(upcomingConferenceProvider);
-
-  return [
-    StatCard(
-      icon: Icons.how_to_reg,
-      title: 'اجتماع الأربعاء',
-      subtitle: isToday
-          ? 'اليوم — ${Dates.display(meeting)}'
-          : 'آخر اجتماع ${Dates.display(meeting)}',
-      value: o == null || o.meetingPresent + o.meetingAbsent == 0
-          ? '—'
-          : percent(o.attendanceRate),
-      onTap: () => context.go(Routes.attendance),
-    ),
-    const SizedBox(height: 12),
-    StatCard(
-      icon: Icons.phone_in_talk,
-      title: 'افتقاد تليفوني مطلوب',
-      subtitle: phone == null ? null : '$phone سيدات يحتجن اتصال',
-      value: '${phone ?? '—'}',
-      color: AppColors.warning,
-      background: AppColors.warningLight,
-      onTap: () => context.go(Routes.followUps),
-    ),
-    const SizedBox(height: 12),
-    StatCard(
-      icon: Icons.home,
-      title: 'افتقاد منزلي',
-      subtitle: home == null ? null : '$home سيدة',
-      value: '${home ?? '—'}',
-      color: AppColors.home,
-      background: AppColors.homeLight,
-      onTap: () => context.go(Routes.followUps),
-    ),
-    const SizedBox(height: 12),
-    StatCard(
-      icon: Icons.cake,
-      title: 'أعياد الميلاد اليوم',
-      value: '${o?.birthdaysToday ?? '—'}',
-      color: AppColors.gold,
-      background: AppColors.goldLight,
-      onTap: () => context.push(Routes.birthdays),
-    ),
-    if (conf != null) ...[
-      const SizedBox(height: 12),
-      StatCard(
-        icon: Icons.event,
-        title: conf.name,
-        subtitle: 'يبدأ ${Dates.display(conf.firstDate)}',
-        value: '',
-        onTap: () => context.push(Routes.conference(conf.id)),
-      ),
-    ],
-  ];
-}
-
-class _ServantBody extends ConsumerWidget {
-  const _ServantBody();
+/// The meeting card: picture of who came + one big button.
+class _MeetingCard extends ConsumerWidget {
+  const _MeetingCard({required this.present, required this.absent, required this.meetingId});
+  final int present;
+  final int absent;
+  final String meetingId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overview = ref.watch(overviewProvider);
-    final o = overview.value;
+    final date = Dates.parseDayId(meetingId);
+    final isToday = Dates.dayId(DateTime.now()) == meetingId;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(isToday ? 'اجتماع النهارده' : 'آخر اجتماع — ${Dates.display(date)}',
+              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          AttendanceDonut(present: present, absent: absent),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () {
+              ref.read(absentOnlyProvider.notifier).set(false);
+              context.go(Routes.attendance);
+            },
+            icon: const Icon(Icons.how_to_reg),
+            label: const Text('تسجيل الحضور'),
+          ),
+          if (absent > 0) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.absent,
+                  side: const BorderSide(color: AppColors.absent, width: 1.5)),
+              onPressed: () {
+                ref.read(meetingDateProvider.notifier).set(date);
+                ref.read(absentOnlyProvider.notifier).set(true);
+                context.go(Routes.attendance);
+              },
+              icon: const Icon(Icons.person_off),
+              label: Text('مين اللي غاب؟ ($absent)'),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _ServantBody extends ConsumerWidget {
+  const _ServantBody({required this.user});
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final o = ref.watch(overviewProvider).value;
+    final summary = o == null ? null : ref.watch(meetingSummaryProvider(o.meetingId)).value;
+    final mine = summary?.byServant[user.id];
+    final streets = (ref.watch(streetsProvider).value ?? const [])
+        .where((s) => s.servantId == user.id)
+        .toList();
+    final myWomen = streets.fold<int>(0, (a, s) => a + s.womenCount);
+    final myTasks = (ref.watch(suggestionsProvider(const SuggestionQuery())).value ?? const [])
+        .where((s) => s.assignedServantId == user.id)
+        .length;
+
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (overview.hasError)
-        ErrorView(
-            error: overview.error!,
-            onRetry: () => ref.invalidate(overviewProvider)),
-      ..._priorityCards(context, ref, o),
-      const SectionTitle('السيدات المسؤولة عنهن'),
-      StatCard(
-        icon: Icons.groups,
-        title: 'عدد السيدات',
-        value: '${o?.activeWomen ?? '—'}',
-        onTap: () => context.go(Routes.women),
-      ),
+      if (o != null)
+        _MeetingCard(
+            present: mine?.present ?? 0,
+            absent: mine?.absent ?? 0,
+            meetingId: o.meetingId),
       const SizedBox(height: 12),
-      StatCard(
-        icon: Icons.person_off,
-        title: 'غائبات في آخر اجتماع',
-        value: '${o?.meetingAbsent ?? '—'}',
-        color: AppColors.absent,
-        background: AppColors.absentLight,
-        onTap: () {
-          _openAbsent(context, ref, o);
-        },
+      TileRow(
+        NumberTile(
+          icon: Icons.volunteer_activism,
+          label: 'افتقاد مطلوب منكِ',
+          value: '$myTasks',
+          color: myTasks > 0 ? AppColors.warning : AppColors.present,
+          background: myTasks > 0 ? AppColors.warningLight : AppColors.presentLight,
+          onTap: () => context.go(Routes.followUps),
+        ),
+        NumberTile(
+          icon: Icons.cake,
+          label: 'أعياد ميلاد النهارده',
+          value: '${o?.birthdaysToday ?? 0}',
+          color: AppColors.gold,
+          background: AppColors.goldLight,
+          onTap: () => context.push(Routes.birthdays),
+        ),
       ),
-      const SizedBox(height: 12),
-      StatCard(
-        icon: Icons.insights,
-        title: 'إحصائيات الخادمات',
-        value: '',
-        onTap: () => context.push(Routes.statsServants),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('شوارعك ($myWomen سيدة)',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            if (streets.isEmpty)
+              const Text('لم يحدد أبونا شوارع لكِ بعد.',
+                  style: TextStyle(fontSize: 18, color: AppColors.textMuted))
+            else
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final s in streets)
+                  Chip(
+                    avatar: const Icon(Icons.signpost, size: 20),
+                    label: Text('${s.name} (${s.womenCount})',
+                        style: const TextStyle(fontSize: 17)),
+                  ),
+              ]),
+          ]),
+        ),
       ),
     ]);
   }
 }
 
 class _FatherBody extends ConsumerWidget {
-  const _FatherBody();
+  const _FatherBody({required this.user});
+  final AppUser user;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overview = ref.watch(overviewProvider);
-    final o = overview.value;
-    String v(int? n) => n == null ? '—' : '$n';
-    Widget grid(List<Widget> cards) => LayoutBuilder(builder: (ctx, c) {
-          final cols = c.maxWidth > 700 ? 2 : 1;
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final card in cards)
-                SizedBox(
-                    width: (c.maxWidth - (cols - 1) * 12) / cols, child: card),
-            ],
-          );
-        });
+    final o = ref.watch(overviewProvider).value;
+    final summary = o == null ? null : ref.watch(meetingSummaryProvider(o.meetingId)).value;
+    final tasks = ref.watch(suggestionsProvider(const SuggestionQuery())).value ?? const [];
+    final servants = (ref.watch(allUsersProvider).value ?? const [])
+        .where((u) => u.isServant && u.active)
+        .toList();
+    final streets = ref.watch(streetsProvider).value ?? const [];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (overview.hasError)
-        ErrorView(
-            error: overview.error!,
-            onRetry: () => ref.invalidate(overviewProvider)),
-      ..._priorityCards(context, ref, o),
-      const SectionTitle('نظرة عامة'),
-      grid([
-        StatCard(
-            icon: Icons.groups,
-            title: 'إجمالي السيدات',
-            subtitle: o == null ? null : 'النشطات ${o.activeWomen}',
-            value: v(o?.totalWomen),
-            onTap: () => context.go(Routes.women)),
-        StatCard(
-            icon: Icons.badge,
-            title: 'الخادمات',
-            value: v(o?.totalServants),
-            onTap: () => context.push(Routes.users)),
-        StatCard(
-            icon: Icons.check_circle,
-            title: 'حضور هذا الأربعاء',
-            value: v(o?.meetingPresent),
-            color: AppColors.present,
-            background: AppColors.presentLight),
-        StatCard(
-            icon: Icons.person_off,
-            title: 'الغائبات',
-            value: v(o?.meetingAbsent),
-            color: AppColors.absent,
-            background: AppColors.absentLight,
-            onTap: () {
-              _openAbsent(context, ref, o);
-            }),
-      ]),
-      const SectionTitle('الافتقاد (هذا الشهر)'),
-      grid([
-        StatCard(
-            icon: Icons.pending_actions,
-            title: 'افتقاد لم يتم',
-            subtitle: o == null ? null : 'متأخر ${o.followUps.overdue}',
-            value: v(o?.followUps.pending),
-            color: AppColors.warning,
-            background: AppColors.warningLight,
-            onTap: () => context.go(Routes.followUps)),
-        StatCard(
-            icon: Icons.task_alt,
-            title: 'افتقاد تم',
-            value: v(o?.followUps.completed),
-            color: AppColors.present,
-            background: AppColors.presentLight),
-        StatCard(
-            icon: Icons.phone,
-            title: 'إجمالي المكالمات',
-            value: v(o?.followUps.calls)),
-        StatCard(
-            icon: Icons.home,
-            title: 'إجمالي الزيارات',
-            value: v(o?.followUps.visits),
-            color: AppColors.home,
-            background: AppColors.homeLight),
-      ]),
-      const SectionTitle('المزيد'),
-      grid([
-        StatCard(
-            icon: Icons.bar_chart,
-            title: 'الإحصائيات الكاملة',
-            value: '',
-            onTap: () => context.go(Routes.stats)),
-        StatCard(
-            icon: Icons.signpost,
-            title: 'إحصائيات الشوارع',
-            value: '',
-            onTap: () => context.push(Routes.streets)),
-        StatCard(
-            icon: Icons.event,
-            title: 'المؤتمرات',
-            value: '',
-            onTap: () => context.push(Routes.conferences)),
-      ]),
+      if (o != null)
+        _MeetingCard(
+            present: summary?.present ?? o.meetingPresent,
+            absent: summary?.absent ?? o.meetingAbsent,
+            meetingId: o.meetingId),
+      const SizedBox(height: 12),
+      TileRow(
+        NumberTile(
+          icon: Icons.volunteer_activism,
+          label: 'افتقاد لسه ما اتعملش',
+          value: '${tasks.length}',
+          color: tasks.isNotEmpty ? AppColors.warning : AppColors.present,
+          background: tasks.isNotEmpty ? AppColors.warningLight : AppColors.presentLight,
+          onTap: () => context.go(Routes.followUps),
+        ),
+        NumberTile(
+          icon: Icons.cake,
+          label: 'أعياد ميلاد النهارده',
+          value: '${o?.birthdaysToday ?? 0}',
+          color: AppColors.gold,
+          background: AppColors.goldLight,
+          onTap: () => context.push(Routes.birthdays),
+        ),
+      ),
+      TileRow(
+        NumberTile(
+          icon: Icons.groups,
+          label: 'كل السيدات',
+          value: '${o?.activeWomen ?? 0}',
+          onTap: () => context.go(Routes.women),
+        ),
+        NumberTile(
+          icon: Icons.badge,
+          label: 'الخادمات',
+          value: '${servants.length}',
+          onTap: () => context.push(Routes.streets),
+        ),
+      ),
+      // Each servant = her streets (the only assignment).
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('كل خادمة في آخر اجتماع',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('(حسب الشوارع اللي معاها)',
+                style: TextStyle(fontSize: 16, color: AppColors.textMuted)),
+            if (servants.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('لا توجد خادمات بعد', style: TextStyle(fontSize: 18)),
+              ),
+            for (final s in servants)
+              Builder(builder: (_) {
+                final c = summary?.byServant[s.id];
+                final hasStreets = streets.any((st) => st.servantId == s.id);
+                final left = tasks.where((t) => t.assignedServantId == s.id).length;
+                return CountBar(
+                  label: s.name,
+                  count: c?.present ?? 0,
+                  total: (c?.present ?? 0) + (c?.absent ?? 0),
+                  extra: hasStreets
+                      ? 'افتقاد لسه: $left'
+                      : 'لم تُحدد لها شوارع بعد',
+                );
+              }),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => context.push(Routes.streets),
+              icon: const Icon(Icons.signpost),
+              label: const Text('توزيع الشوارع على الخادمات'),
+            ),
+          ]),
+        ),
+      ),
     ]);
   }
-}
-
-/// Opens the attendance sheet of the SAME meeting the card counts, showing
-/// only the absent women.
-void _openAbsent(BuildContext context, WidgetRef ref, OverviewStats? o) {
-  if (o != null) {
-    ref.read(meetingDateProvider.notifier).set(Dates.parseDayId(o.meetingId));
-  }
-  ref.read(absentOnlyProvider.notifier).set(true);
-  context.go(Routes.attendance);
 }

@@ -23,7 +23,6 @@ abstract final class Routes {
 
   // Statistics
   static const statsServants = '/stats/servants';
-  static const statsWomen = '/stats/women';
 
   // More
   static const streets = '/streets';

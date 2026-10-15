@@ -14,7 +14,7 @@ import '../../excel/data/excel_export_service.dart';
 import '../../statistics/domain/stats_models.dart';
 import '../../users/data/users_repository.dart';
 import '../data/stats_repository.dart';
-import 'charts.dart';
+import '../../../core/widgets/simple_charts.dart';
 
 /// Monthly data bundle for the full report.
 class MonthlyReportData {
@@ -76,12 +76,6 @@ class _State extends ConsumerState<MonthlyReportScreen> {
   late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   bool _busy = false;
 
-  void _shift(int delta) => setState(() {
-        _month = DateTime(_month.year, _month.month + delta);
-      });
-
-  String get _title => '${_month.month}/${_month.year}';
-
   Future<void> _export(
       MonthlyReportData d, List<List<Object?>> Function() rowsFor,
       List<String> headers, String suffix) async {
@@ -105,29 +99,7 @@ class _State extends ConsumerState<MonthlyReportScreen> {
       body: AbsorbPointer(
         absorbing: _busy,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(children: [
-                IconButton(
-                  tooltip: 'الشهر السابق',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => _shift(-1),
-                ),
-                Expanded(
-                  child: Text('شهر $_title',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800)),
-                ),
-                IconButton(
-                  tooltip: 'الشهر التالي',
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => _shift(1),
-                ),
-              ]),
-            ),
-          ),
+          MonthPicker(month: _month, onChanged: (m) => setState(() => _month = m)),
           const SizedBox(height: 8),
           if (_busy) const LinearProgressIndicator(minHeight: 6),
           AsyncBody(
@@ -139,133 +111,66 @@ class _State extends ConsumerState<MonthlyReportScreen> {
                 present += m.present;
                 absent += m.absent;
               }
-              final rate =
-                  present + absent == 0 ? 0.0 : present / (present + absent);
               final f = d.followUps;
               return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SectionTitle('اجتماعات الأربعاء'),
-                    StatCard(
-                        icon: Icons.percent,
-                        title: 'نسبة الحضور',
-                        subtitle: '${d.meetings.length} اجتماع',
-                        value: percent(rate),
-                        color: AppColors.present,
-                        background: AppColors.presentLight),
-                    const SizedBox(height: 10),
-                    AttendanceTrendChart(meetings: d.meetings),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.how_to_reg,
-                              title: 'حضور',
-                              value: '$present')),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.person_off,
-                              title: 'غياب',
-                              value: '$absent',
-                              color: AppColors.absent,
-                              background: AppColors.absentLight)),
-                    ]),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.groups,
-                              title: 'السيدات',
-                              subtitle: 'النشطات ${d.activeWomen}',
-                              value: '${d.totalWomen}')),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.volunteer_activism,
-                              title: 'الخادمات',
-                              value: '${d.servants.length}')),
-                    ]),
-                    const SectionTitle('الافتقاد'),
-                    Row(children: [
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.phone,
-                              title: 'مكالمات',
-                              value: '${f.calls}')),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.home,
-                              title: 'زيارات',
-                              value: '${f.visits}',
-                              color: AppColors.home,
-                              background: AppColors.homeLight)),
-                    ]),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.task_alt,
-                              title: 'افتقاد تم',
-                              value: '${f.completed}',
-                              color: AppColors.present,
-                              background: AppColors.presentLight)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: StatCard(
-                              icon: Icons.pending_actions,
-                              title: 'لم يتم',
-                              subtitle: 'متأخر ${f.overdue}',
-                              value: '${f.pending}',
-                              color: AppColors.warning,
-                              background: AppColors.warningLight)),
-                    ]),
-                    const SectionTitle('الخادمات'),
-                    if (d.servants.isEmpty)
-                      const Text('لا توجد خادمات',
-                          style: TextStyle(fontSize: 18))
-                    else
-                      RateBars(rows: [
-                        for (final s in d.servants)
-                          (s.servantName, s.attendanceRate,
-                              '(${s.assignedWomen} سيدة)'),
-                      ]),
-                    for (final s in d.servants)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(s.servantName,
-                                    style: const TextStyle(
-                                        fontSize: 19,
-                                        fontWeight: FontWeight.w800)),
-                                const SizedBox(height: 6),
-                                Wrap(spacing: 16, runSpacing: 4, children: [
-                                  Text('السيدات: ${s.assignedWomen}',
-                                      style: const TextStyle(fontSize: 16)),
-                                  Text('الحضور: ${percent(s.attendanceRate)}',
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          color: AppColors.present)),
-                                  Text('الغياب: ${s.meetingAbsent}',
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          color: AppColors.absent)),
-                                  Text(
-                                      'مكالمات: ${s.followUps.calls} — تم ${s.followUps.phoneCompleted}',
-                                      style: const TextStyle(fontSize: 16)),
-                                  Text(
-                                      'زيارات: ${s.followUps.visits} — تم ${s.followUps.homeCompleted}',
-                                      style: const TextStyle(fontSize: 16)),
-                                  Text('لم يتم: ${s.followUps.pending}',
-                                      style: const TextStyle(fontSize: 16)),
-                                ]),
-                              ]),
-                        ),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(children: [
+                          AttendanceDonut(
+                              present: present,
+                              absent: absent,
+                              title: '${d.meetings.length} اجتماع في الشهر'),
+                          const SizedBox(height: 16),
+                          WeeklyBars(items: [
+                            for (final m in d.meetings.reversed)
+                              (
+                                '${Dates.parseDayId(m.meetingId).day}/${Dates.parseDayId(m.meetingId).month}',
+                                m.present
+                              ),
+                          ]),
+                        ]),
                       ),
+                    ),
+                    const SectionTitle('الافتقاد'),
+                    TileRow(
+                      NumberTile(
+                          icon: Icons.task_alt,
+                          label: 'افتقاد اتعمل',
+                          value: '${f.completed}',
+                          color: AppColors.present,
+                          background: AppColors.presentLight),
+                      NumberTile(
+                          icon: Icons.hourglass_bottom,
+                          label: 'افتقاد لسه',
+                          value: '${f.pending}',
+                          color: AppColors.warning,
+                          background: AppColors.warningLight),
+                    ),
+                    const SectionTitle('الخادمات'),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: d.servants.isEmpty
+                            ? const Text('لا توجد خادمات',
+                                style: TextStyle(fontSize: 18))
+                            : Column(children: [
+                                for (final s in d.servants)
+                                  CountBar(
+                                    label:
+                                        '${s.servantName} (${s.assignedWomen} سيدة)',
+                                    count: s.meetingPresent,
+                                    total: s.meetingPresent + s.meetingAbsent,
+                                    extra:
+                                        'اتصلت ${s.followUps.calls} • زارت ${s.followUps.visits}',
+                                  ),
+                              ]),
+                      ),
+                    ),
                     const SectionTitle('تصدير'),
                     MenuTile(
                         icon: Icons.file_download,
@@ -316,7 +221,7 @@ class _State extends ConsumerState<MonthlyReportScreen> {
                                   'زيارات',
                                   'افتقاد منزلي تم',
                                   'لم يتم',
-                                  'متأخر'
+                                  'متأخر أكثر من أسبوع'
                                 ],
                                 'servants')),
                     const SizedBox(height: 32),

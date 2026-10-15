@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../core/constants/enums.dart';
-import '../../../core/errors/app_failure.dart';
+import '../../../core/routing/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/simple_charts.dart';
 import '../../../core/widgets/states.dart';
-import '../../streets/data/street_repository.dart';
+import '../../auth/data/auth_repository.dart';
+import '../../auth/domain/app_user.dart';
 import '../../users/data/users_repository.dart';
-import '../data/stats_repository.dart';
-import '../domain/stats_models.dart';
-import 'charts.dart';
-import 'stats_filter_bar.dart';
+import 'simple_stats_providers.dart';
 
-final _servantStatsProvider = FutureProvider.autoDispose
-    .family<List<ServantStats>, StatsFilter>((ref, f) async {
-  final repo = ref.watch(statsRepositoryProvider);
-  final now = DateTime.now();
-  final users = await AppFailure.guard(ref.watch(allUsersProvider.future));
-  final servants = users
-      .where((u) => u.isServant && u.active)
-      .where((u) => f.servantId == null || u.id == f.servantId)
-      .toList();
-  return Future.wait(servants.map((s) => repo.servantStats(s, f, now)));
-});
-
-/// إحصائيات الخادمات — full statistics for every servant, visible to all.
+/// "إحصائياتي": a servant's own month (her streets only).
+/// The father can open any servant's page from the list at the top.
 class ServantsStatsScreen extends ConsumerStatefulWidget {
   const ServantsStatsScreen({super.key});
 
@@ -34,130 +23,109 @@ class ServantsStatsScreen extends ConsumerStatefulWidget {
 }
 
 class _State extends ConsumerState<ServantsStatsScreen> {
-  RangePreset _preset = RangePreset.month;
-  late DateRange _range = _preset.resolve(DateTime.now());
-  String? _servantId;
-  String? _streetId;
-  FollowUpType? _type;
-
-  StatsFilter get _filter => StatsFilter(
-      range: _range, servantId: _servantId, streetId: _streetId, followUpType: _type);
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  AppUser? _picked;
 
   @override
   Widget build(BuildContext context) {
-    final stats = ref.watch(_servantStatsProvider(_filter));
-    final streets = ref.watch(streetsProvider).value ?? const [];
-    final servants = ref.watch(activeServantsProvider).value ?? const [];
+    final me = ref.watch(requireUserProvider);
+    final servants = me.isFather
+        ? (ref.watch(allUsersProvider).value ?? const [])
+            .where((u) => u.isServant && u.active)
+            .toList()
+        : const <AppUser>[];
+    final who = me.isFather ? (_picked ?? servants.firstOrNull) : me;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('إحصائيات الخادمات')),
+      appBar: AppBar(title: Text(me.isFather ? 'إحصائيات خادمة' : 'إحصائياتي')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        RangeSelector(
-          preset: _preset,
-          range: _range,
-          onChanged: (p, r) => setState(() {
-            _preset = p;
-            _range = r;
-          }),
-        ),
-        const SizedBox(height: 8),
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          DropdownButton<String?>(
-            value: _servantId,
-            hint: const Text('كل الخادمات'),
+        if (me.isFather) ...[
+          DropdownButtonFormField<String>(
+            initialValue: who?.id,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'اختار الخادمة'),
             items: [
-              const DropdownMenuItem(value: null, child: Text('كل الخادمات')),
-              for (final s in servants) DropdownMenuItem(value: s.id, child: Text(s.name)),
+              for (final s in servants)
+                DropdownMenuItem(value: s.id, child: Text(s.name)),
             ],
-            onChanged: (v) => setState(() => _servantId = v),
+            onChanged: (id) => setState(
+                () => _picked = servants.firstWhere((s) => s.id == id)),
           ),
-          DropdownButton<String?>(
-            value: _streetId,
-            hint: const Text('كل الشوارع'),
-            items: [
-              const DropdownMenuItem(value: null, child: Text('كل الشوارع')),
-              for (final s in streets) DropdownMenuItem(value: s.id, child: Text(s.name)),
-            ],
-            onChanged: (v) => setState(() => _streetId = v),
-          ),
-          DropdownButton<FollowUpType?>(
-            value: _type,
-            hint: const Text('كل أنواع الافتقاد'),
-            items: const [
-              DropdownMenuItem(value: null, child: Text('كل أنواع الافتقاد')),
-              DropdownMenuItem(value: FollowUpType.phoneCall, child: Text('مكالمات')),
-              DropdownMenuItem(value: FollowUpType.homeVisit, child: Text('زيارات')),
-            ],
-            onChanged: (v) => setState(() => _type = v),
-          ),
-        ]),
-        AsyncBody(
-          value: stats,
-          onRetry: () => ref.invalidate(_servantStatsProvider(_filter)),
-          builder: (list) {
-            if (list.isEmpty) {
-              return const EmptyState(icon: Icons.badge, title: 'لا توجد خادمات');
-            }
-            final sorted = [...list]
-              ..sort((a, b) => b.attendanceRate.compareTo(a.attendanceRate));
-            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (list.length > 1) ...[
-                const SectionTitle('مقارنة نسبة الحضور'),
-                RateBars(rows: [
-                  for (final s in sorted)
-                    (s.servantName, s.attendanceRate, '(${s.assignedWomen} سيدة)'),
-                ]),
-              ],
-              for (final s in sorted) _ServantCard(s),
-            ]);
-          },
-        ),
+          const SizedBox(height: 12),
+        ],
+        MonthPicker(month: _month, onChanged: (m) => setState(() => _month = m)),
+        if (who == null)
+          const EmptyState(icon: Icons.badge, title: 'لا توجد خادمات بعد')
+        else
+          _ServantMonth(servant: who, month: _month),
       ]),
     );
   }
 }
 
-class _ServantCard extends StatelessWidget {
-  const _ServantCard(this.s);
-  final ServantStats s;
+class _ServantMonth extends ConsumerWidget {
+  const _ServantMonth({required this.servant, required this.month});
+  final AppUser servant;
+  final DateTime month;
 
   @override
-  Widget build(BuildContext context) {
-    final f = s.followUps;
-    Widget cell(String label, String value, [Color color = AppColors.primary]) =>
-        SizedBox(
-          width: 150,
-          child: Column(children: [
-            Text(value,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color)),
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
-          ]),
-        );
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(s.servantName, style: Theme.of(context).textTheme.titleLarge),
-            const Divider(height: 24),
-            Wrap(alignment: WrapAlignment.spaceAround, runSpacing: 16, children: [
-              cell('السيدات المسؤولة عنهن (حسب الشارع)', '${s.assignedWomen}'),
-              cell('نسبة الحضور', percent(s.attendanceRate), AppColors.present),
-              cell('مرات الغياب', '${s.meetingAbsent}', AppColors.absent),
-              cell('غياب متتالي', '${s.withConsecutiveAbsences}', AppColors.absent),
-              cell('المكالمات', '${f.calls}'),
-              cell('افتقاد تليفوني تم', '${f.phoneCompleted}', AppColors.present),
-              cell('الزيارات', '${f.visits}', AppColors.home),
-              cell('افتقاد منزلي تم', '${f.homeCompleted}', AppColors.present),
-              cell('لم يتم بعد', '${f.pending}', AppColors.warning),
-              cell('متأخر', '${f.overdue}', AppColors.absent),
-              cell('اقتراحات تليفوني', '${f.phoneSuggestions}', AppColors.warning),
-              cell('اقتراحات منزلي', '${f.homeSuggestions}', AppColors.home),
-            ]),
-          ]),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(servantMonthProvider((servant, month)));
+    final meetings = ref.watch(monthMeetingsProvider(month)).value ?? const [];
+    return AsyncBody(
+      value: stats,
+      onRetry: () => ref.invalidate(servantMonthProvider((servant, month))),
+      builder: (s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle('سيدات شوارعك: ${s.assignedWomen}'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: AttendanceDonut(
+                present: s.meetingPresent,
+                absent: s.meetingAbsent,
+                title: 'الحضور في الشهر كله'),
+          ),
         ),
-      ),
+        const SectionTitle('الحضور في كل أربعاء'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: WeeklyBars(items: [
+              for (final m in meetings)
+                (
+                  '${Dates.parseDayId(m.meetingId).day}/${Dates.parseDayId(m.meetingId).month}',
+                  m.byServant[servant.id]?.present ?? 0,
+                ),
+            ]),
+          ),
+        ),
+        const SectionTitle('الافتقاد'),
+        TileRow(
+          NumberTile(
+              icon: Icons.task_alt,
+              label: 'افتقاد اتعمل',
+              value: '${s.followUps.completed}',
+              color: AppColors.present,
+              background: AppColors.presentLight),
+          NumberTile(
+              icon: Icons.hourglass_bottom,
+              label: 'افتقاد لسه',
+              value: '${s.followUps.pending}',
+              color: AppColors.warning,
+              background: AppColors.warningLight,
+              onTap: () => context.go(Routes.followUps)),
+        ),
+        TileRow(
+          NumberTile(icon: Icons.phone, label: 'مكالمات', value: '${s.followUps.calls}'),
+          NumberTile(
+              icon: Icons.home,
+              label: 'زيارات',
+              value: '${s.followUps.visits}',
+              color: AppColors.home,
+              background: AppColors.homeLight),
+        ),
+        const SizedBox(height: 24),
+      ]),
     );
   }
 }

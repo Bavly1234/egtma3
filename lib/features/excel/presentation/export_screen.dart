@@ -13,7 +13,8 @@ import '../../conferences/data/conference_repository.dart';
 import '../../followups/data/follow_up_repository.dart';
 import '../../statistics/data/stats_repository.dart';
 import '../../statistics/domain/stats_models.dart';
-import '../../statistics/presentation/stats_filter_bar.dart';
+import '../../../core/widgets/simple_charts.dart';
+import '../../statistics/presentation/simple_stats_providers.dart';
 import '../../users/data/users_repository.dart';
 import '../../women/data/women_repository.dart';
 import '../../women/domain/woman.dart';
@@ -31,8 +32,8 @@ class ExportScreen extends ConsumerStatefulWidget {
 }
 
 class _ExportScreenState extends ConsumerState<ExportScreen> {
-  RangePreset _preset = RangePreset.quarter;
-  late DateRange _range = _preset.resolve(DateTime.now());
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  DateRange get _range => monthRange(_month);
   bool _busy = false;
 
   /// First five columns match the church's import template exactly
@@ -177,15 +178,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                 : '${filter.activeCount} فلتر مطبق',
             onTap: () => _run(() => _exportWomen(filter, 'women_filtered')),
           ),
-          const SectionTitle('حسب الفترة'),
-          RangeSelector(
-            preset: _preset,
-            range: _range,
-            onChanged: (p, r) => setState(() {
-              _preset = p;
-              _range = r;
-            }),
-          ),
+          const SectionTitle('حسب الشهر'),
+          MonthPicker(month: _month, onChanged: (m) => setState(() => _month = m)),
           const SizedBox(height: 12),
           MenuTile(icon: Icons.how_to_reg, title: 'الحضور', onTap: () => _run(_exportAttendance)),
           MenuTile(
