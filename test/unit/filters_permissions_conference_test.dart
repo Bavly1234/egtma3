@@ -82,9 +82,11 @@ void main() {
 
     test('street is the only assignment; servants see everything', () {
       expect(Routes.fatherOnly, contains(Routes.streets));
-      expect(Routes.fatherOnly, contains(Routes.stats));
-      // Open to every active servant.
+      // Only the father takes the servants' attendance.
+      expect(Routes.fatherOnly, contains(Routes.servantAttendance));
+      // Open to every active servant (full women statistics included).
       for (final r in [
+        Routes.stats,
         Routes.womanNew,
         Routes.conferenceNew,
         Routes.statsServants,

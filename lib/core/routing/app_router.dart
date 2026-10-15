@@ -24,7 +24,8 @@ import '../../features/home/presentation/home_shell.dart';
 import '../../features/home/presentation/more_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
-import '../../features/statistics/presentation/father_stats_screen.dart';
+import '../../features/statistics/presentation/stats_screen.dart';
+import '../../features/attendance/presentation/servant_attendance_screen.dart';
 import '../../features/statistics/presentation/servants_stats_screen.dart';
 import '../../features/statistics/presentation/monthly_report_screen.dart';
 import '../../features/streets/presentation/streets_screen.dart';
@@ -101,8 +102,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               routes: [r(Routes.attendance, (_) => const AttendanceScreen())]),
           StatefulShellBranch(
               routes: [r(Routes.followUps, (_) => const FollowUpsScreen())]),
-          StatefulShellBranch(routes: [r(Routes.stats, (_) => const FatherStatsScreen())]),
+          StatefulShellBranch(routes: [r(Routes.stats, (_) => const StatsScreen())]),
           StatefulShellBranch(routes: [r(Routes.more, (_) => const MoreScreen())]),
+          StatefulShellBranch(routes: [
+            r(Routes.servantAttendance, (_) => const ServantAttendanceScreen())
+          ]),
         ],
       ),
       r(Routes.womanNew, (_) => const WomanFormScreen()),

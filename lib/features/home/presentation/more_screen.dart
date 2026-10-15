@@ -47,7 +47,21 @@ class MoreScreen extends ConsumerWidget {
               color: AppColors.present,
               onTap: () => go(Routes.statsServants)),
         if (user.isFather) ...[
+          MenuTile(
+              icon: Icons.how_to_reg,
+              title: 'حضور السيدات (الأربعاء)',
+              color: AppColors.present,
+              onTap: () => context.go(Routes.attendance)),
+          MenuTile(
+              icon: Icons.volunteer_activism,
+              title: 'الافتقاد',
+              color: AppColors.warning,
+              onTap: () => context.go(Routes.followUps)),
           const SectionTitle('إدارة'),
+          MenuTile(
+              icon: Icons.badge,
+              title: 'حضور الخادمات',
+              onTap: () => context.go(Routes.servantAttendance)),
           MenuTile(
               icon: Icons.signpost,
               title: 'الشوارع وتوزيع الخادمات',

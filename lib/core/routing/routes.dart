@@ -10,6 +10,7 @@ abstract final class Routes {
   static const attendance = '/attendance';
   static const followUps = '/followups';
   static const stats = '/stats';
+  static const servantAttendance = '/servants-attendance';
   static const more = '/more';
 
   // Women
@@ -45,7 +46,7 @@ abstract final class Routes {
   /// all statistics screens, monthly report, import/export.
   /// Assignment is by street only (managed on the Streets screen).
   static const fatherOnly = [
-    stats,
+    servantAttendance,
     streets,
     users,
     audit,

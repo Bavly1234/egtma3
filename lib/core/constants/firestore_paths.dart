@@ -18,4 +18,7 @@ abstract final class FsPaths {
   static const settings = 'settings';
   static const settingsAppDoc = 'app';
   static const auditLogs = 'audit_logs';
+
+  /// Servants' own attendance at the Wednesday meeting (taken by the father).
+  static const servantAttendance = 'servant_attendance';
 }

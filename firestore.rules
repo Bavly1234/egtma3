@@ -176,6 +176,18 @@ service cloud.firestore {
       allow delete: if isFather();
     }
 
+    // ---------- servants' attendance (taken by the father) ----------
+    // Deterministic id {meetingId}_{servantId}: one record per servant per Wednesday.
+    match /servant_attendance/{id} {
+      allow read: if isActive();
+      allow create, update: if isFather()
+        && id == request.resource.data.meetingId + '_' + request.resource.data.servantId
+        && request.resource.data.meetingId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && isStatus(request.resource.data.status)
+        && request.resource.data.markedBy == request.auth.uid;
+      allow delete: if isFather();
+    }
+
     // ---------- notifications ----------
     // Created by the app; create-only, so an existing id is never overwritten
     // (that rejection is how duplicates are prevented).

@@ -37,15 +37,23 @@ class _HomeShellState extends ConsumerState<HomeShell>
     _Tab(1, Icons.groups, 'السيدات'),
     _Tab(2, Icons.how_to_reg, 'الحضور'),
     _Tab(3, Icons.volunteer_activism, 'الافتقاد'),
-    _Tab(5, Icons.menu, 'المزيد'),
-  ];
-  static const _fatherTabs = [
-    _Tab(0, Icons.home, 'الرئيسية'),
-    _Tab(1, Icons.groups, 'السيدات'),
-    _Tab(2, Icons.how_to_reg, 'الحضور'),
-    _Tab(3, Icons.volunteer_activism, 'الافتقاد'),
     _Tab(4, Icons.bar_chart, 'الإحصائيات'),
     _Tab(5, Icons.menu, 'المزيد'),
+  ];
+
+  /// أبونا: a control-panel layout, different from the servants'.
+  static const _fatherTabs = [
+    _Tab(0, Icons.dashboard, 'لوحة التحكم'),
+    _Tab(6, Icons.badge, 'حضور الخادمات'),
+    _Tab(4, Icons.bar_chart, 'الإحصائيات'),
+    _Tab(1, Icons.groups, 'السيدات'),
+    _Tab(5, Icons.menu, 'المزيد'),
+  ];
+
+  /// On a computer screen أبونا also gets these in the side menu.
+  static const _fatherRailExtra = [
+    _Tab(2, Icons.how_to_reg, 'حضور السيدات'),
+    _Tab(3, Icons.volunteer_activism, 'الافتقاد'),
   ];
 
   @override
@@ -105,7 +113,50 @@ class _HomeShellState extends ConsumerState<HomeShell>
       // Wednesday 9pm: mark everyone not marked present as absent.
       ref.read(autoAbsenceServiceProvider).runIfDue(user);
     }
-    final tabs = (user?.isFather ?? false) ? _fatherTabs : _servantTabs;
+    final isFather = user?.isFather ?? false;
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    void go(_Tab t) => widget.shell.goBranch(
+          t.branch,
+          initialLocation: t.branch == widget.shell.currentIndex,
+        );
+
+    if (isFather && wide) {
+      // Admin-style side menu on a computer.
+      final rail = [..._fatherTabs.take(4), ..._fatherRailExtra, _fatherTabs.last];
+      final current = rail.indexWhere((t) => t.branch == widget.shell.currentIndex);
+      return Scaffold(
+        body: Row(children: [
+          NavigationRail(
+            backgroundColor: const Color(0xFF0E1E36),
+            extended: MediaQuery.sizeOf(context).width >= 1200,
+            minExtendedWidth: 220,
+            selectedIndex: current < 0 ? 0 : current,
+            onDestinationSelected: (i) => go(rail[i]),
+            labelType: MediaQuery.sizeOf(context).width >= 1200
+                ? NavigationRailLabelType.none
+                : NavigationRailLabelType.all,
+            indicatorColor: const Color(0xFFD6A84A),
+            selectedIconTheme: const IconThemeData(color: Color(0xFF0E1E36), size: 28),
+            unselectedIconTheme: const IconThemeData(color: Colors.white70, size: 28),
+            selectedLabelTextStyle: const TextStyle(
+                color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+            unselectedLabelTextStyle:
+                const TextStyle(color: Colors.white70, fontSize: 15),
+            leading: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Icon(Icons.church, color: Color(0xFFD6A84A), size: 34),
+            ),
+            destinations: [
+              for (final t in rail)
+                NavigationRailDestination(icon: Icon(t.icon), label: Text(t.label)),
+            ],
+          ),
+          Expanded(child: widget.shell),
+        ]),
+      );
+    }
+
+    final tabs = isFather ? _fatherTabs : _servantTabs;
     final current =
         tabs.indexWhere((t) => t.branch == widget.shell.currentIndex);
 
@@ -113,10 +164,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       body: widget.shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: current < 0 ? 0 : current,
-        onDestinationSelected: (i) => widget.shell.goBranch(
-          tabs[i].branch,
-          initialLocation: tabs[i].branch == widget.shell.currentIndex,
-        ),
+        onDestinationSelected: (i) => go(tabs[i]),
         destinations: [
           for (final t in tabs)
             NavigationDestination(icon: Icon(t.icon), label: t.label),

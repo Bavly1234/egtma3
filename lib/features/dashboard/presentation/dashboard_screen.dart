@@ -15,9 +15,9 @@ import '../../auth/domain/app_user.dart';
 import '../../followups/data/follow_up_repository.dart';
 import '../../notifications/data/notification_repository.dart';
 import '../../streets/data/street_repository.dart';
-import '../../users/data/users_repository.dart';
 import '../../verse/presentation/verse_card.dart';
 import 'dashboard_providers.dart';
+import 'father_dashboard.dart';
 
 /// Home page. Kept deliberately short for older users: the meeting result
 /// as a picture, a few big numbers, and big buttons for what to do next.
@@ -28,6 +28,8 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(requireUserProvider);
+    // أبونا has his own control panel, different from the servants' home.
+    if (user.isFather) return FatherDashboard(user: user);
     final unread = ref.watch(unreadCountProvider).value ?? 0;
     return Scaffold(
       appBar: AppBar(
@@ -52,7 +54,7 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             _Greeting(user: user),
             const SizedBox(height: 16),
-            if (user.isFather) _FatherBody(user: user) else _ServantBody(user: user),
+            _ServantBody(user: user),
             const SizedBox(height: 16),
             const VerseCard(),
             const SizedBox(height: 24),
@@ -189,100 +191,6 @@ class _ServantBody extends ConsumerWidget {
                         style: const TextStyle(fontSize: 17)),
                   ),
               ]),
-          ]),
-        ),
-      ),
-    ]);
-  }
-}
-
-class _FatherBody extends ConsumerWidget {
-  const _FatherBody({required this.user});
-  final AppUser user;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final o = ref.watch(overviewProvider).value;
-    final summary = o == null ? null : ref.watch(meetingSummaryProvider(o.meetingId)).value;
-    final tasks = ref.watch(suggestionsProvider(const SuggestionQuery())).value ?? const [];
-    final servants = (ref.watch(allUsersProvider).value ?? const [])
-        .where((u) => u.isServant && u.active)
-        .toList();
-    final streets = ref.watch(streetsProvider).value ?? const [];
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (o != null)
-        _MeetingCard(
-            present: summary?.present ?? o.meetingPresent,
-            absent: summary?.absent ?? o.meetingAbsent,
-            meetingId: o.meetingId),
-      const SizedBox(height: 12),
-      TileRow(
-        NumberTile(
-          icon: Icons.volunteer_activism,
-          label: 'افتقاد لسه ما اتعملش',
-          value: '${tasks.length}',
-          color: tasks.isNotEmpty ? AppColors.warning : AppColors.present,
-          background: tasks.isNotEmpty ? AppColors.warningLight : AppColors.presentLight,
-          onTap: () => context.go(Routes.followUps),
-        ),
-        NumberTile(
-          icon: Icons.cake,
-          label: 'أعياد ميلاد النهارده',
-          value: '${o?.birthdaysToday ?? 0}',
-          color: AppColors.gold,
-          background: AppColors.goldLight,
-          onTap: () => context.push(Routes.birthdays),
-        ),
-      ),
-      TileRow(
-        NumberTile(
-          icon: Icons.groups,
-          label: 'كل السيدات',
-          value: '${o?.activeWomen ?? 0}',
-          onTap: () => context.go(Routes.women),
-        ),
-        NumberTile(
-          icon: Icons.badge,
-          label: 'الخادمات',
-          value: '${servants.length}',
-          onTap: () => context.push(Routes.streets),
-        ),
-      ),
-      // Each servant = her streets (the only assignment).
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Text('كل خادمة في آخر اجتماع',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const Text('(حسب الشوارع اللي معاها)',
-                style: TextStyle(fontSize: 16, color: AppColors.textMuted)),
-            if (servants.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('لا توجد خادمات بعد', style: TextStyle(fontSize: 18)),
-              ),
-            for (final s in servants)
-              Builder(builder: (_) {
-                final c = summary?.byServant[s.id];
-                final hasStreets = streets.any((st) => st.servantId == s.id);
-                final left = tasks.where((t) => t.assignedServantId == s.id).length;
-                return CountBar(
-                  label: s.name,
-                  count: c?.present ?? 0,
-                  total: (c?.present ?? 0) + (c?.absent ?? 0),
-                  extra: hasStreets
-                      ? 'افتقاد لسه: $left'
-                      : 'لم تُحدد لها شوارع بعد',
-                );
-              }),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => context.push(Routes.streets),
-              icon: const Icon(Icons.signpost),
-              label: const Text('توزيع الشوارع على الخادمات'),
-            ),
           ]),
         ),
       ),
