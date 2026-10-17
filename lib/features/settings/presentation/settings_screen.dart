@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../notifications/data/notification_repository.dart';
 
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/feedback.dart';
@@ -11,7 +10,6 @@ import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/app_user.dart';
 import '../../notifications/data/reminder_service.dart';
 import '../../statistics/data/stats_maintenance.dart';
-import '../data/demo_seeder.dart';
 import '../data/settings_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -182,52 +180,13 @@ class _ChurchSettings extends ConsumerWidget {
             ],
           ),
         ),
-        const SectionTitle('بيانات تجريبية'),
+        const SectionTitle('صيانة'),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'للتجربة فقط. كل البيانات التجريبية مُعلّمة (تجريبي) '
-                  'ويمكن حذفها بالكامل قبل الاستخدام الفعلي.',
-                  style: TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => runGuarded(context, () async {
-                    final r = await ref.read(demoSeederProvider).seed(user);
-                    if (context.mounted) AppToast.success(context, r);
-                  }),
-                  icon: const Icon(Icons.science),
-                  label: const Text('إضافة بيانات تجريبية'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final ok = await confirmAction(
-                      context,
-                      title: 'حذف البيانات التجريبية',
-                      message: 'سيتم حذف كل البيانات المعلّمة كتجريبية فقط.',
-                      destructive: true,
-                      confirmLabel: 'حذف',
-                    );
-                    if (!ok || !context.mounted) return;
-                    await runGuarded(context, () async {
-                      final r = await ref.read(demoSeederProvider).remove();
-                      // Totals must not keep counting the deleted test women.
-                      await ref.read(statsMaintenanceProvider).rebuild();
-                      await ref
-                          .read(notificationRepositoryProvider)
-                          .deleteMine(user.id, demoOnly: true);
-                      if (context.mounted) AppToast.success(context, r);
-                    });
-                  },
-                  icon: const Icon(Icons.delete_sweep),
-                  label: const Text('حذف البيانات التجريبية'),
-                ),
-                const SizedBox(height: 16),
                 const Text(
                   'لو الإحصائيات بتعرض أرقام لسيدات اتمسحوا، اضغطي هنا '
                   'وهيتحسب كل حاجة من جديد من البيانات الموجودة فعلاً.',
@@ -254,29 +213,6 @@ class _ChurchSettings extends ConsumerWidget {
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text('إعادة حساب الإحصائيات'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final ok = await confirmAction(
-                      context,
-                      title: 'تحديد الخادمات',
-                      message:
-                          'كل سيدة اسمها بيبدأ بـ "ت/" هتتعلم "خادمة"، '
-                          'وتظهر في حضور الخادمات بدل حضور السيدات.',
-                      confirmLabel: 'ابدأ',
-                    );
-                    if (!ok || !context.mounted) return;
-                    await runGuarded(context, () async {
-                      final n = await ref
-                          .read(statsMaintenanceProvider)
-                          .markServantsByName();
-                      if (context.mounted)
-                        AppToast.success(context, 'تم تحديد $n خادمة ✅');
-                    });
-                  },
-                  icon: const Icon(Icons.badge),
-                  label: const Text('اللي اسمها يبدأ بـ "ت/" = خادمة'),
                 ),
               ],
             ),
