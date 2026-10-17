@@ -134,7 +134,7 @@ void main() {
       expect(meeting.at, DateTime(2026, 10, 6, 18)); // today 6pm (Tuesday)
       expect(meeting.repeat, ReminderRepeat.weekly);
       final att = p.firstWhere((r) => r.id == ReminderIds.attendance);
-      expect(att.at, DateTime(2026, 10, 7, 21)); // Wednesday 9pm
+      expect(att.at, DateTime(2026, 10, 7, 20)); // Wednesday 8pm, before the 9pm auto-absence
     });
 
     test('birthday scheduled on the day, within horizon only', () {

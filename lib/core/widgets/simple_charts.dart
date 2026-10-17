@@ -164,7 +164,11 @@ class CountBar extends StatelessWidget {
     this.countWord = 'حضر',
     this.color = AppColors.present,
     this.extra,
+    this.valueText,
   });
+
+  /// Replaces the default "حضر X من Y" text.
+  final String? valueText;
   final String label;
   final int count;
   final int total;
@@ -185,7 +189,7 @@ class CountBar extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       fontSize: 19, fontWeight: FontWeight.w800))),
-          Text(total == 0 ? 'لا يوجد' : '$countWord $count من $total',
+          Text(valueText ?? (total == 0 ? 'لا يوجد' : '$countWord $count من $total'),
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w700, color: color)),
         ]),

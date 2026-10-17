@@ -9,7 +9,7 @@ import '../../../core/services/firebase_providers.dart';
 class AppSettings {
   const AppSettings({
     this.meetingReminderHour = 18,
-    this.attendanceReminderHour = 21,
+    this.attendanceReminderHour = 20,
     this.followUpReminderHour = 10,
     this.notifyFatherBirthdays = true,
     this.verseNotifications = true,
@@ -27,7 +27,7 @@ class AppSettings {
   factory AppSettings.fromMap(Map<String, dynamic>? m) => AppSettings(
         meetingReminderHour: (m?['meetingReminderHour'] as num?)?.toInt() ?? 18,
         attendanceReminderHour:
-            (m?['attendanceReminderHour'] as num?)?.toInt() ?? 21,
+            (m?['attendanceReminderHour'] as num?)?.toInt() ?? 20,
         followUpReminderHour: (m?['followUpReminderHour'] as num?)?.toInt() ?? 10,
         notifyFatherBirthdays: (m?['notifyFatherBirthdays'] as bool?) ?? true,
         verseNotifications: (m?['verseNotifications'] as bool?) ?? true,

@@ -93,7 +93,7 @@ abstract final class ReminderPlanner {
       out.add(PlannedReminder(
         id: ReminderIds.attendance,
         title: 'تذكير بتسجيل الحضور',
-        body: 'هل سجلتِ حضور اجتماع اليوم؟',
+        body: 'هل سجلتِ حضور اجتماع اليوم؟ اللي ما يتسجلش هيتسجل غائب الساعة 9 بالليل.',
         at: _nextWeekday(now, DateTime.wednesday, settings.attendanceReminderHour),
         repeat: ReminderRepeat.weekly,
         payload: 'route:/attendance',

@@ -199,13 +199,16 @@ class _Body extends StatelessWidget {
 
       if (s.streets.isNotEmpty) ...[
         const SectionTitle('الشوارع'),
-        _Bars(rows: s.streets),
+        Text('عدد الأربعاءات: ${s.weeks.length} — النسبة = الحضور من كل التسجيلات، '
+            'والرقم = متوسط كل أربعاء',
+            style: const TextStyle(fontSize: 16, color: AppColors.textMuted)),
+        _Bars(rows: s.streets, weeks: s.weeks.length),
       ],
       if (query.streetId == null && s.servants.any((r) => r.total > 0)) ...[
         const SectionTitle('حضور سيدات كل خادمة'),
         const Text('(حسب الشوارع اللي مع كل خادمة)',
             style: TextStyle(fontSize: 16, color: AppColors.textMuted)),
-        _Bars(rows: s.servants),
+        _Bars(rows: s.servants, weeks: s.weeks.length),
       ],
       if (s.servantAttendance.any((r) => r.total > 0)) ...[
         const SectionTitle('حضور الخادمات نفسهم'),
@@ -251,7 +254,7 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _WomenList extends StatelessWidget {
+class _WomenList extends StatefulWidget {
   const _WomenList(
       {required this.rows, required this.line, required this.color, required this.empty});
   final List<WomanCount> rows;
@@ -260,34 +263,102 @@ class _WomenList extends StatelessWidget {
   final String empty;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: rows.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(empty, style: const TextStyle(fontSize: 18)))
-            : Column(children: [
-                for (final (i, c) in rows.indexed)
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: color.withValues(alpha: .15),
-                      child: Text('${i + 1}',
-                          style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+  State<_WomenList> createState() => _WomenListState();
+}
+
+/// Ranked list; shows the first N (10 by default, any number typed, or all).
+class _WomenListState extends State<_WomenList> {
+  final _count = TextEditingController(text: '10');
+  int _n = 10;
+
+  @override
+  void dispose() {
+    _count.dispose();
+    super.dispose();
+  }
+
+  void _set(int n) => setState(() {
+        _n = n;
+        _count.text = '$n';
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final color = widget.color;
+    final shown = rows.take(_n).toList();
+    return Card(
+      child: rows.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(widget.empty, style: const TextStyle(fontSize: 18)))
+          : Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(children: [
+                  const Text('اعرض أول', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _count,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                          isDense: true, contentPadding: EdgeInsets.all(10)),
+                      onChanged: (v) {
+                        final n = int.tryParse(v.trim());
+                        if (n != null && n > 0) setState(() => _n = n);
+                      },
                     ),
-                    title: Text(c.woman.fullName),
-                    subtitle: Text(c.woman.streetName),
-                    trailing: Text(line(c),
-                        style: TextStyle(
-                            color: color, fontWeight: FontWeight.w800, fontSize: 17)),
-                    onTap: () => context.push(Routes.woman(c.woman.id)),
                   ),
-              ]),
-      );
+                  const SizedBox(width: 8),
+                  Text('من ${rows.length}', style: const TextStyle(fontSize: 18)),
+                  const Spacer(),
+                  TextButton(
+                      onPressed: () => _set(rows.length),
+                      child: const Text('الكل', style: TextStyle(fontSize: 18))),
+                ]),
+              ),
+              for (final (i, c) in shown.indexed)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: color.withValues(alpha: .15),
+                    child: Text('${i + 1}',
+                        style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+                  ),
+                  title: Text(c.woman.fullName),
+                  subtitle: Text(c.woman.streetName),
+                  trailing: Text(widget.line(c),
+                      style: TextStyle(
+                          color: color, fontWeight: FontWeight.w800, fontSize: 17)),
+                  onTap: () => context.push(Routes.woman(c.woman.id)),
+                ),
+            ]),
+    );
+  }
 }
 
 class _Bars extends StatelessWidget {
-  const _Bars({required this.rows, this.word = 'حضر'});
+  const _Bars({required this.rows, this.word = 'حضر', this.weeks});
   final List<NamedCount> rows;
   final String word;
+
+  /// When set (more than one Wednesday), each row shows the attendance rate
+  /// and the average per Wednesday instead of the raw sum over the period
+  /// ("حضر 2 من 2" meant 2 marks, not 2 women).
+  final int? weeks;
+
+  String? _text(NamedCount r) {
+    final n = weeks;
+    if (n == null || n <= 1 || r.total == 0) return null;
+    String avg(int v) {
+      final a = v / n;
+      return a == a.roundToDouble() ? '${a.round()}' : a.toStringAsFixed(1);
+    }
+    return '${(r.count * 100 / r.total).round()}% — '
+        'في المتوسط ${avg(r.count)} من ${avg(r.total)} كل أربعاء';
+  }
 
   @override
   Widget build(BuildContext context) => Card(
@@ -295,7 +366,12 @@ class _Bars extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Column(children: [
             for (final r in rows)
-              CountBar(label: r.name, count: r.count, total: r.total, countWord: word),
+              CountBar(
+                  label: r.name,
+                  count: r.count,
+                  total: r.total,
+                  countWord: word,
+                  valueText: _text(r)),
           ]),
         ),
       );

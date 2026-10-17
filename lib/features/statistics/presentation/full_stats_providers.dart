@@ -177,8 +177,8 @@ final fullStatsProvider =
       for (final id in weeks.keys.toList()..sort())
         WeekCount(id, weeks[id]!.$1, weeks[id]!.$2),
     ],
-    mostPresent: mostPresent.take(10).toList(),
-    mostAbsent: mostAbsent.take(10).toList(),
+    mostPresent: mostPresent, // all, in order — the screen shows the top N
+    mostAbsent: mostAbsent,
     streets: streetRows,
     servants: servantRows,
     servantAttendance: ownRows,
