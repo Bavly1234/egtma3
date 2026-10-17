@@ -121,11 +121,17 @@ class AttendanceRepository {
   /// (Wednesday 9pm cutoff). Only creates missing records — existing marks
   /// are never touched — so re-running is safe. Sets `autoAbsentDone`.
   /// Returns the ids of the newly-marked women.
-  Future<List<String>> autoFillAbsent(String meetingId, AppUser actor) async {
+  ///
+  /// [force] (أبونا's manual button): run even if it already ran, and include
+  /// women added after that Wednesday. Still only fills missing records.
+  Future<List<String>> autoFillAbsent(String meetingId, AppUser actor,
+      {bool force = false}) async {
     // Already done (possibly by another phone): never count absences twice.
-    final meetingDoc = await AppFailure.guard(
-        _db.collection(FsPaths.meetings).doc(meetingId).get());
-    if (meetingDoc.data()?['autoAbsentDone'] == true) return const [];
+    if (!force) {
+      final meetingDoc = await AppFailure.guard(
+          _db.collection(FsPaths.meetings).doc(meetingId).get());
+      if (meetingDoc.data()?['autoAbsentDone'] == true) return const [];
+    }
     final attSnap = await AppFailure.guard(
         _col.where('meetingId', isEqualTo: meetingId).get());
     final marked = {
@@ -143,6 +149,7 @@ class AttendanceRepository {
       if (marked.contains(d.id)) return false;
       // Servants have their own attendance (taken by أبونا).
       if (d.data()['isServant'] == true) return false;
+      if (force) return true;
       final created = tsToDate(d.data()['createdAt']);
       return created == null || !created.isAfter(cutoff);
     }).toList();

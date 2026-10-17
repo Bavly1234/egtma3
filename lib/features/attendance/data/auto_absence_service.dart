@@ -29,12 +29,14 @@ class AutoAbsenceService {
     return Dates.cutoffPassed(m, now) ? m : m.subtract(const Duration(days: 7));
   }
 
-  Future<void> runIfDue(AppUser user, {DateTime? meeting}) async {
+  /// Returns how many women were marked absent. [force]: أبونا's manual
+  /// "mark the rest absent" button (see [AttendanceRepository.autoFillAbsent]).
+  Future<int> runIfDue(AppUser user, {DateTime? meeting, bool force = false}) async {
     final now = DateTime.now();
     final date = meeting ?? lastClosedMeeting(now);
-    if (!Dates.cutoffPassed(date, now)) return;
+    if (!Dates.cutoffPassed(date, now)) return 0;
     final meetingId = Dates.dayId(date);
-    if (!_running.add(meetingId)) return;
+    if (!_running.add(meetingId) && !force) return 0;
     try {
       // The servants (women marked خادمة) the same way — independently, so
       // a problem there never blocks the women's auto-absence.
@@ -43,7 +45,7 @@ class AutoAbsenceService {
       } catch (e) {
         AppLog.w('Servant auto absence failed', e);
       }
-      final ids = await _attendance.autoFillAbsent(meetingId, user);
+      final ids = await _attendance.autoFillAbsent(meetingId, user, force: force);
       for (var i = 0; i < ids.length; i += 30) {
         final chunk = ids.sublist(i, (i + 30).clamp(0, ids.length));
         final snap = await _db
@@ -57,9 +59,12 @@ class AutoAbsenceService {
       if (ids.isNotEmpty) {
         AppLog.i('Auto-marked ${ids.length} absent for $meetingId');
       }
+      return ids.length;
     } catch (e, st) {
       AppLog.e('Auto absence failed', e, st);
       _running.remove(meetingId); // allow a retry later
+      if (force) rethrow;
+      return 0;
     }
   }
 }

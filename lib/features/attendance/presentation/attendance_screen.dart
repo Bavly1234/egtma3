@@ -49,6 +49,35 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         .runIfDue(ref.read(requireUserProvider), meeting: date));
   }
 
+  /// أبونا: mark everyone still unmarked in the chosen meeting as absent.
+  Future<void> _markRestAbsent() async {
+    final date = ref.read(meetingDateProvider);
+    if (!Dates.cutoffPassed(date, DateTime.now())) {
+      AppToast.error(context, 'الاجتماع لسه ما خلصش (بعد 9 بالليل يوم الأربعاء)');
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسجيل غياب'),
+        content: Text('كل السيدات اللي ما اتسجلوش في اجتماع '
+            '${Dates.display(date)} هيتسجلوا غائبات. '
+            'اللي متسجلين حاضر أو غائب مش هيتغيروا.',
+            style: const TextStyle(fontSize: 18)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('سجّل غياب')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await runGuarded(context, () async {
+      final n = await ref.read(autoAbsenceServiceProvider)
+          .runIfDue(ref.read(requireUserProvider), meeting: date, force: true);
+      if (mounted) AppToast.success(context, 'تم تسجيل $n غائبة ✅');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(meetingDateProvider, (_, _) => _maybeAutoFill());
@@ -59,6 +88,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         title: const Text('اجتماع الأربعاء'),
         actions: [
           const SyncStatusChip(),
+          if (ref.watch(requireUserProvider).isFather)
+            IconButton(
+              tooltip: 'تسجيل غياب لكل اللي ما اتسجلوش',
+              icon: const Icon(Icons.person_off, size: 28),
+              onPressed: _markRestAbsent,
+            ),
           IconButton(
             tooltip: 'سجل الاجتماعات',
             icon: const Icon(Icons.history, size: 28),
