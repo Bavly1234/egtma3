@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/services/firebase_providers.dart';
+import '../../excel/domain/import_models.dart';
 
 /// Rebuilds every statistic from the records that really exist.
 ///
@@ -27,6 +28,27 @@ class StatsMaintenance {
       }
       await b.commit();
     }
+  }
+
+  /// Marks every woman whose name starts with "ت/" as خادمة.
+  /// Returns how many were changed.
+  Future<int> markServantsByName() async {
+    final women = await AppFailure.guard(_db.collection(FsPaths.women).get(),
+        timeout: const Duration(seconds: 60));
+    final refs = [
+      for (final d in women.docs)
+        if (d.data()['isServant'] != true &&
+            looksLikeServantName((d.data()['fullName'] as String?) ?? ''))
+          d.reference,
+    ];
+    for (var i = 0; i < refs.length; i += 400) {
+      final b = _db.batch();
+      for (final r in refs.skip(i).take(400)) {
+        b.update(r, {'isServant': true});
+      }
+      await b.commit();
+    }
+    return refs.length;
   }
 
   /// Returns a short Arabic summary.

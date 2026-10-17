@@ -201,6 +201,23 @@ class _ChurchSettings extends ConsumerWidget {
               icon: const Icon(Icons.refresh),
               label: const Text('إعادة حساب الإحصائيات'),
             ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final ok = await confirmAction(context,
+                    title: 'تحديد الخادمات',
+                    message: 'كل سيدة اسمها بيبدأ بـ "ت/" هتتعلم "خادمة"، '
+                        'وتظهر في حضور الخادمات بدل حضور السيدات.',
+                    confirmLabel: 'ابدأ');
+                if (!ok || !context.mounted) return;
+                await runGuarded(context, () async {
+                  final n = await ref.read(statsMaintenanceProvider).markServantsByName();
+                  if (context.mounted) AppToast.success(context, 'تم تحديد $n خادمة ✅');
+                });
+              },
+              icon: const Icon(Icons.badge),
+              label: const Text('اللي اسمها يبدأ بـ "ت/" = خادمة'),
+            ),
           ]),
         ),
       ),

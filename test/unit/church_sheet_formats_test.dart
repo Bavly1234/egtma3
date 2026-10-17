@@ -174,6 +174,12 @@ void main() {
       expect(rows.map((r) => r.draft!.isServant), [true, true, true, false, false]);
     });
 
+    test('names starting with "ت/" are servants', () {
+      expect(looksLikeServantName('ت/ مارينا'), isTrue);
+      expect(looksLikeServantName(' ت / مارينا'), isTrue);
+      expect(looksLikeServantName('تريزا'), isFalse);
+    });
+
     test('sheets without the column import as non-servants', () {
       final h = ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد'];
       final row = ImportParser.parse([h, ['سيدة', null, 'ش', 'ع', null]],

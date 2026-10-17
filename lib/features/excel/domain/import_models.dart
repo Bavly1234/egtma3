@@ -145,7 +145,8 @@ abstract final class ImportParser {
       final servantRaw = text(r, ImportField.servant);
       final isServant = const {'✓', '✔', '√', '☑'}.contains(servantRaw) ||
           const {'نعم', 'ايوه', 'اه', 'yes', 'y', '1', 'true', 'x', 'خادمه', 'خادم'}
-              .contains(ArabicText.normalize(servantRaw));
+              .contains(ArabicText.normalize(servantRaw)) ||
+          looksLikeServantName(text(r, ImportField.name));
 
       final dobRaw = raw(r, ImportField.dateOfBirth);
       final birth = BirthDate.parse(dobRaw, now: now);
@@ -176,3 +177,7 @@ abstract final class ImportParser {
     return out;
   }
 }
+
+/// The church sheet writes servants' names as "ت/ مارينا ...".
+bool looksLikeServantName(String name) =>
+    RegExp(r'^\s*ت\s*/').hasMatch(name);
