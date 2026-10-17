@@ -63,6 +63,9 @@ class AttendanceRepository {
     Map<String, String?> meetingServants = const {},
   }) async {
     final list = women.where((w) => previous[w.id] != status).toList();
+    // Commits are not awaited one by one: offline, a commit only completes
+    // when the server confirms, which would hold back the next batches.
+    final commits = <Future<void>>[];
     for (var i = 0; i < list.length; i += _batchSize) {
       final batch = _db.batch();
       final top = <String, int>{};
@@ -117,8 +120,9 @@ class AttendanceRepository {
         },
         SetOptions(merge: true),
       );
-      await batch.commit();
+      commits.add(batch.commit());
     }
+    await Future.wait(commits);
   }
 
   /// Auto-marks every still-unmarked active woman as absent for [meetingId]
@@ -167,6 +171,9 @@ class AttendanceRepository {
         streetServant[w['streetId'] as String?] ?? 'unassigned';
 
     final filledIds = <String>[];
+    // Commits are not awaited one by one: offline, a commit only completes
+    // when the server confirms, which would hold back the next batches.
+    final commits = <Future<void>>[];
     for (var i = 0; i < unmarked.length; i += _batchSize) {
       final batch = _db.batch();
       final top = <String, int>{};
@@ -209,8 +216,9 @@ class AttendanceRepository {
         },
         SetOptions(merge: true),
       );
-      await batch.commit();
+      commits.add(batch.commit());
     }
+    await Future.wait(commits);
     if (unmarked.isEmpty) {
       await _db.collection(FsPaths.meetings).doc(meetingId).set(
         {'autoAbsentDone': true, 'updatedAt': FieldValue.serverTimestamp()},
