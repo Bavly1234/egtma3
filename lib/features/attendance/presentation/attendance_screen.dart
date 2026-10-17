@@ -49,35 +49,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         .runIfDue(ref.read(requireUserProvider), meeting: date));
   }
 
-  /// أبونا: mark everyone still unmarked in the chosen meeting as absent.
-  Future<void> _markRestAbsent() async {
-    final date = ref.read(meetingDateProvider);
-    if (!Dates.cutoffPassed(date, DateTime.now())) {
-      AppToast.error(context, 'الاجتماع لسه ما خلصش (بعد 9 بالليل يوم الأربعاء)');
-      return;
-    }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل غياب'),
-        content: Text('كل السيدات اللي ما اتسجلوش في اجتماع '
-            '${Dates.display(date)} هيتسجلوا غائبات. '
-            'اللي متسجلين حاضر أو غائب مش هيتغيروا.',
-            style: const TextStyle(fontSize: 18)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('سجّل غياب')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    await runGuarded(context, () async {
-      final n = await ref.read(autoAbsenceServiceProvider)
-          .runIfDue(ref.read(requireUserProvider), meeting: date, force: true);
-      if (mounted) AppToast.success(context, 'تم تسجيل $n غائبة ✅');
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     ref.listen(meetingDateProvider, (_, _) => _maybeAutoFill());
@@ -88,12 +59,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         title: const Text('اجتماع الأربعاء'),
         actions: [
           const SyncStatusChip(),
-          if (ref.watch(requireUserProvider).isFather)
-            IconButton(
-              tooltip: 'تسجيل غياب لكل اللي ما اتسجلوش',
-              icon: const Icon(Icons.person_off, size: 28),
-              onPressed: _markRestAbsent,
-            ),
           IconButton(
             tooltip: 'سجل الاجتماعات',
             icon: const Icon(Icons.history, size: 28),
@@ -244,18 +209,21 @@ class _Summary extends ConsumerWidget {
     final rate = present + absent == 0 ? 0.0 : present / (present + absent);
     final actions = ref.read(attendanceActionsProvider);
 
-    Future<void> bulkPresent() async {
+    // Works for any Wednesday (also past ones): everyone still unmarked in
+    // this list becomes absent; existing marks are never changed.
+    Future<void> restAbsent() async {
       final targets = women.where((w) => statuses[w.id] == null).toList();
-      final all = targets.isEmpty;
-      final list = all ? women : targets;
+      if (targets.isEmpty) {
+        AppToast.success(context, 'كل السيدات متسجلين بالفعل ✅');
+        return;
+      }
       final ok = await confirmAction(
         context,
-        title: 'تسجيل الكل حاضر',
-        message: all
-            ? 'سيتم تغيير حالة كل السيدات المعروضات (${list.length}) إلى حاضر.'
-            : 'سيتم تسجيل ${list.length} سيدة لم تُسجل بعد كحاضر.',
+        title: 'الباقي غياب',
+        message: 'سيتم تسجيل ${targets.length} سيدة لم تُسجل بعد كغائبة. '
+            'اللي متسجلين حاضر أو غائب مش هيتغيروا.',
       );
-      if (ok) actions.markAll(list, AttendanceStatus.present);
+      if (ok) actions.markAll(targets, AttendanceStatus.absent);
     }
 
     return Card(
@@ -272,9 +240,9 @@ class _Summary extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: bulkPresent,
-              icon: const Icon(Icons.done_all, color: AppColors.present),
-              label: const Text('الكل حاضر'),
+              onPressed: restAbsent,
+              icon: const Icon(Icons.person_off, color: AppColors.absent),
+              label: Text('الباقي غياب ($unmarked)'),
             ),
           ),
           const SizedBox(height: 6),

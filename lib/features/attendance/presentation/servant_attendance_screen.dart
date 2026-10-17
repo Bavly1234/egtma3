@@ -7,6 +7,7 @@ import '../../../core/services/sync_status.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/dates.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/simple_charts.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
@@ -46,6 +47,28 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
     ref.read(syncControllerProvider.notifier).track(write);
   }
 
+  /// Any Wednesday (also past ones): every unmarked servant becomes absent.
+  Future<void> _restAbsent(List<Woman> list, Map<String, AttendanceStatus> statuses) async {
+    final targets = list.where((s) => statuses[s.id] == null).toList();
+    if (targets.isEmpty) {
+      AppToast.success(context, 'كل الخادمات متسجلين بالفعل ✅');
+      return;
+    }
+    final ok = await confirmAction(
+      context,
+      title: 'الباقي غياب',
+      message: 'سيتم تسجيل ${targets.length} خادمة لم تُسجل بعد كغائبة.',
+    );
+    if (!ok) return;
+    final repo = ref.read(servantAttendanceRepositoryProvider);
+    final meetingId = Dates.dayId(_date);
+    final user = ref.read(requireUserProvider);
+    for (final s in targets) {
+      ref.read(syncControllerProvider.notifier)
+          .track(repo.mark(meetingId, s, AttendanceStatus.absent, user));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final servants = ref.watch(servantWomenProvider);
@@ -73,6 +96,12 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
                 child: AttendanceDonut(present: present, absent: absent,
                     title: 'من ${list.length} خادمة'),
               ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _restAbsent(list, statuses),
+              icon: const Icon(Icons.person_off, color: AppColors.absent),
+              label: Text('الباقي غياب (${list.length - present - absent})'),
             ),
             const SizedBox(height: 8),
             const Text(
