@@ -82,14 +82,31 @@ class _Greeting extends ConsumerWidget {
 }
 
 /// The meeting card: picture of who came + one big button.
-class _MeetingCard extends ConsumerWidget {
-  const _MeetingCard({required this.present, required this.absent, required this.meetingId});
-  final int present;
-  final int absent;
+/// A small switch shows either the whole meeting or only my streets.
+class _MeetingCard extends ConsumerStatefulWidget {
+  const _MeetingCard({
+    required this.allPresent,
+    required this.allAbsent,
+    required this.minePresent,
+    required this.mineAbsent,
+    required this.meetingId,
+  });
+  final int allPresent, allAbsent, minePresent, mineAbsent;
   final String meetingId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MeetingCard> createState() => _MeetingCardState();
+}
+
+class _MeetingCardState extends ConsumerState<_MeetingCard> {
+  bool _mine = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget;
+    final meetingId = w.meetingId;
+    final present = _mine ? w.minePresent : w.allPresent;
+    final absent = _mine ? w.mineAbsent : w.allAbsent;
     final date = Dates.parseDayId(meetingId);
     final isToday = Dates.dayId(DateTime.now()) == meetingId;
     return Card(
@@ -98,6 +115,21 @@ class _MeetingCard extends ConsumerWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(isToday ? 'اجتماع النهارده' : 'آخر اجتماع — ${Dates.display(date)}',
               style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          SegmentedButton<bool>(
+            segments: [
+              ButtonSegment(
+                  value: false,
+                  icon: const Icon(Icons.groups),
+                  label: Text('كل السيدات (${w.allPresent + w.allAbsent})')),
+              ButtonSegment(
+                  value: true,
+                  icon: const Icon(Icons.signpost),
+                  label: Text('شوارعي بس (${w.minePresent + w.mineAbsent})')),
+            ],
+            selected: {_mine},
+            onSelectionChanged: (v) => setState(() => _mine = v.first),
+          ),
           const SizedBox(height: 12),
           AttendanceDonut(present: present, absent: absent),
           const SizedBox(height: 14),
@@ -150,8 +182,10 @@ class _ServantBody extends ConsumerWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (o != null)
         _MeetingCard(
-            present: mine?.present ?? 0,
-            absent: mine?.absent ?? 0,
+            allPresent: summary?.present ?? 0,
+            allAbsent: summary?.absent ?? 0,
+            minePresent: mine?.present ?? 0,
+            mineAbsent: mine?.absent ?? 0,
             meetingId: o.meetingId),
       const SizedBox(height: 12),
       TileRow(
