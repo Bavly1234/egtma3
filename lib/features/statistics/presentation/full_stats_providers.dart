@@ -165,9 +165,11 @@ final fullStatsProvider =
       ownPresent[m.servantId] = (ownPresent[m.servantId] ?? 0) + 1;
     }
   }
+  // The servants' own attendance: women marked خادمة, taken by أبونا.
+  final ownNames = {for (final m in servantMarks) m.servantId: m.servantName};
   final ownRows = [
-    for (final s in servantUsers)
-      NamedCount(s.name, ownPresent[s.id] ?? 0, ownTotal[s.id] ?? 0),
+    for (final e in ownNames.entries)
+      NamedCount(e.value, ownPresent[e.key] ?? 0, ownTotal[e.key] ?? 0),
   ]..sort((a, b) => b.count.compareTo(a.count));
 
   return FullStats(
@@ -181,7 +183,7 @@ final fullStatsProvider =
     servants: servantRows,
     servantAttendance: ownRows,
     followUps: followUps,
-    activeWomen: women.where((w) => w.active).length,
+    activeWomen: women.where((w) => w.active && !w.isServant).length,
   );
 });
 

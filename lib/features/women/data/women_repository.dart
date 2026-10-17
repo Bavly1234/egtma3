@@ -39,6 +39,7 @@ class WomenRepository {
     var q = scoped(user);
     if (f.streetId != null) q = q.where('streetId', isEqualTo: f.streetId);
     if (f.active != null) q = q.where('active', isEqualTo: f.active);
+    if (f.servantsOnly) q = q.where('isServant', isEqualTo: true);
     if (f.birthMonth != null) {
       q = q.where('birthMonth', isEqualTo: f.birthMonth);
     }

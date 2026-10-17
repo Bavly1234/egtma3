@@ -20,6 +20,7 @@ import '../../statistics/presentation/simple_stats_providers.dart';
 import '../../streets/data/street_repository.dart';
 import '../../users/data/users_repository.dart';
 import '../../verse/presentation/verse_card.dart';
+import '../../women/domain/woman.dart';
 import 'dashboard_providers.dart';
 
 /// أبونا's control panel: different from the servants' pages — a dark header
@@ -35,9 +36,12 @@ class FatherDashboard extends ConsumerWidget {
     final meetingId = o?.meetingId ?? Dates.dayId(Dates.currentOrLastMeeting(DateTime.now()));
     final summary = ref.watch(meetingSummaryProvider(meetingId)).value;
     final tasks = ref.watch(suggestionsProvider(const SuggestionQuery())).value ?? const [];
+    // Servant accounts (streets / follow-ups) and the women marked خادمة
+    // (whose attendance أبونا takes).
     final servants = (ref.watch(allUsersProvider).value ?? const [])
         .where((u) => u.isServant && u.active)
         .toList();
+    final servantWomen = ref.watch(servantWomenProvider).value ?? const [];
     final servantMarks = ref.watch(servantMeetingProvider(meetingId)).value ?? const {};
     final unread = ref.watch(unreadCountProvider).value ?? 0;
     final now = ref.watch(clockProvider)();
@@ -53,7 +57,7 @@ class FatherDashboard extends ConsumerWidget {
               date: now,
               unread: unread,
               women: o?.activeWomen ?? 0,
-              servants: servants.length,
+              servants: servantWomen.length,
               present: summary?.present ?? 0,
               total: (summary?.present ?? 0) + (summary?.absent ?? 0),
               tasks: tasks.length,
@@ -95,7 +99,7 @@ class FatherDashboard extends ConsumerWidget {
                 action: TextButton(
                     onPressed: () => context.go(Routes.servantAttendance),
                     child: const Text('تسجيل')),
-                child: _ServantsMeeting(servants: servants, marks: servantMarks),
+                child: _ServantsMeeting(servants: servantWomen, marks: servantMarks),
               ),
               const _SectionLabel('كل خادمة (حسب شوارعها)'),
               _Panel(child: _ServantsWomen(servants: servants, meetingId: meetingId, tasks: tasks)),
@@ -298,13 +302,13 @@ class _Panel extends StatelessWidget {
 
 class _ServantsMeeting extends StatelessWidget {
   const _ServantsMeeting({required this.servants, required this.marks});
-  final List<AppUser> servants;
+  final List<Woman> servants;
   final Map<String, AttendanceStatus> marks;
 
   @override
   Widget build(BuildContext context) {
     if (servants.isEmpty) {
-      return const Text('لا توجد خادمات بعد', style: TextStyle(fontSize: 18));
+      return const Text('مفيش سيدات متعلم عليهم "خادمة" لسه', style: TextStyle(fontSize: 18));
     }
     final present = servants.where((s) => marks[s.id] == AttendanceStatus.present).toList();
     final absent = servants.where((s) => marks[s.id] == AttendanceStatus.absent).toList();
@@ -321,7 +325,7 @@ class _ServantsMeeting extends StatelessWidget {
           const Text('غابت: ', style: TextStyle(fontSize: 17, color: AppColors.absent)),
           for (final s in absent)
             Chip(
-                label: Text(s.name, style: const TextStyle(fontSize: 16)),
+                label: Text(s.fullName, style: const TextStyle(fontSize: 16)),
                 backgroundColor: AppColors.absentLight),
         ]),
     ]);

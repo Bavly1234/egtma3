@@ -49,7 +49,8 @@ void main() {
     // Servants' own attendance.
     Future<void> own(String day, String sv, bool present) =>
         db.collection(FsPaths.servantAttendance).doc('${day}_$sv').set({
-          'meetingId': day, 'servantId': sv, 'servantName': sv,
+          'meetingId': day, 'servantId': sv,
+          'servantName': sv == 'sv1' ? 'مارينا' : 'ماري',
           'status': present ? 'present' : 'absent',
         });
     await own('2026-10-07', 'sv1', true);

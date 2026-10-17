@@ -180,11 +180,18 @@ service cloud.firestore {
     // Deterministic id {meetingId}_{servantId}: one record per servant per Wednesday.
     match /servant_attendance/{id} {
       allow read: if isActive();
-      allow create, update: if isFather()
-        && id == request.resource.data.meetingId + '_' + request.resource.data.servantId
-        && request.resource.data.meetingId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && isStatus(request.resource.data.status)
-        && request.resource.data.markedBy == request.auth.uid;
+      function servantMarkValid() {
+        return id == request.resource.data.meetingId + '_' + request.resource.data.servantId
+          && request.resource.data.meetingId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && isStatus(request.resource.data.status)
+          && request.resource.data.markedBy == request.auth.uid;
+      }
+      // أبونا marks; any phone may only CREATE the automatic Wednesday-9pm
+      // absence for a servant nobody marked (never overwrite a real mark).
+      allow create: if servantMarkValid() && (isFather()
+        || (isActive() && request.resource.data.status == 'absent'
+            && request.resource.data.autoMarked == true));
+      allow update: if isFather() && servantMarkValid();
       allow delete: if isFather();
     }
 

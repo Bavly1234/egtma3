@@ -244,7 +244,8 @@ class _Summary extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-              'علّمي الحاضرات فقط — الغياب يُسجل تلقائياً الأربعاء 9م. الحفظ تلقائي حتى بدون إنترنت',
+              'علّمي حاضر أو غائب — واللي ما اتعلمش عليها بتتسجل غائب لوحدها الأربعاء الساعة 9 بالليل. '
+              'الضغط تاني على نفس الزرار يلغي التسجيل. الحفظ تلقائي حتى بدون إنترنت',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, color: AppColors.textMuted)),
         ]),
@@ -314,7 +315,15 @@ class _AttendanceRow extends ConsumerWidget {
               label: 'حاضر',
               selected: status == AttendanceStatus.present,
               color: AppColors.present,
-              onTap: () => actions.mark(woman, AttendanceStatus.present),
+              // Toggle: tapping حاضر again undoes the mark (back to unmarked).
+              onTap: () => actions.toggle(woman, AttendanceStatus.present, status),
+            ),
+            const SizedBox(width: 8),
+            _StatusButton(
+              label: 'غائب',
+              selected: status == AttendanceStatus.absent,
+              color: AppColors.absent,
+              onTap: () => actions.toggle(woman, AttendanceStatus.absent, status),
             ),
           ]),
         ]),

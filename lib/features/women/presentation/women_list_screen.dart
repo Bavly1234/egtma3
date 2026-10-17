@@ -30,8 +30,7 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
     super.initState();
     _search.text = ref.read(womenFilterProvider).query;
     _scroll.addListener(() {
-      if (_scroll.position.pixels >
-          _scroll.position.maxScrollExtent - 400) {
+      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400) {
         ref.read(womenListProvider.notifier).loadMore();
       }
     });
@@ -47,8 +46,10 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
 
   void _onSearch(String q) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400),
-        () => ref.read(womenFilterProvider.notifier).setQuery(q));
+    _debounce = Timer(
+      const Duration(milliseconds: 400),
+      () => ref.read(womenFilterProvider.notifier).setQuery(q),
+    );
   }
 
   @override
@@ -78,128 +79,151 @@ class _WomenListScreenState extends ConsumerState<WomenListScreen> {
               label: const Text('إضافة سيدة', style: TextStyle(fontSize: 18)),
             )
           : null,
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _search,
-                onChanged: _onSearch,
-                decoration: InputDecoration(
-                  hintText: 'ابحثي بالاسم أو التليفون أو الشارع',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'مسح البحث',
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _search.clear();
-                            _onSearch('');
-                          },
-                        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _search,
+                    onChanged: _onSearch,
+                    decoration: InputDecoration(
+                      hintText: 'ابحثي بالاسم أو التليفون أو الشارع',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح البحث',
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _search.clear();
+                                _onSearch('');
+                              },
+                            ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Badge(
-              isLabelVisible: filter.activeCount > 0,
-              label: Text('${filter.activeCount}'),
-              child: OutlinedButton.icon(
-                onPressed: () => showWomenFilters(context),
-                icon: const Icon(Icons.filter_list),
-                label: const Text('فلاتر'),
-              ),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: FilterChip(
-              avatar: const Icon(Icons.signpost, size: 20),
-              label: const Text('شوارعي فقط'),
-              selected: filter.streetIds != null,
-              onSelected: (on) {
-                final mine = <String>{
-                  for (final st in ref.read(streetsProvider).value ?? const [])
-                    if (st.servantId == user.id) st.id,
-                };
-                ref.read(womenFilterProvider.notifier).set(
-                    filter.copyWith(streetIds: () => on ? mine : null));
-              },
+                const SizedBox(width: 8),
+                Badge(
+                  isLabelVisible: filter.activeCount > 0,
+                  label: Text('${filter.activeCount}'),
+                  child: OutlinedButton.icon(
+                    onPressed: () => showWomenFilters(context),
+                    icon: const Icon(Icons.filter_list),
+                    label: const Text('فلاتر'),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        if (!filter.isEmpty)
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () {
-                _search.clear();
-                ref.read(womenFilterProvider.notifier).clear();
-              },
-              icon: const Icon(Icons.filter_alt_off),
-              label: const Text('مسح كل الفلاتر'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  FilterChip(
+                    avatar: const Icon(Icons.signpost, size: 20),
+                    label: const Text('شوارعي فقط'),
+                    selected: filter.streetIds != null,
+                    onSelected: (on) {
+                      final mine = <String>{
+                        for (final st
+                            in ref.read(streetsProvider).value ?? const [])
+                          if (st.servantId == user.id) st.id,
+                      };
+                      ref
+                          .read(womenFilterProvider.notifier)
+                          .set(
+                            filter.copyWith(streetIds: () => on ? mine : null),
+                          );
+                    },
+                  ),
+                  FilterChip(
+                    avatar: const Icon(Icons.badge, size: 20),
+                    label: const Text('الخادمات بس'),
+                    selected: filter.servantsOnly,
+                    onSelected: (on) => ref
+                        .read(womenFilterProvider.notifier)
+                        .set(filter.copyWith(servantsOnly: on)),
+                  ),
+                ],
+              ),
             ),
           ),
-        Expanded(
-          child: AsyncBody(
-            value: list,
-            onRetry: () => ref.invalidate(womenListProvider),
-            builder: (s) {
-              if (s.items.isEmpty && !s.hasMore) {
-                return EmptyState(
-                  icon: Icons.group_off,
-                  title: filter.isEmpty ? 'لا توجد سيدات بعد' : 'لا توجد نتائج',
-                  message: filter.isEmpty
-                      ? 'أضيفي سيدة جديدة.'
-                      : 'جربي تغيير البحث أو الفلاتر.',
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: () => ref.refresh(womenListProvider.future),
-                child: ListView.separated(
-                  controller: _scroll,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                  itemCount: s.items.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    if (i == s.items.length) {
-                      if (s.hasMore) {
-                        return Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Center(
-                            child: s.loadingMore
-                                ? const CircularProgressIndicator()
-                                : OutlinedButton(
-                                    onPressed: () => ref
-                                        .read(womenListProvider.notifier)
-                                        .loadMore(),
-                                    child: const Text('عرض المزيد'),
-                                  ),
-                          ),
-                        );
+          if (!filter.isEmpty)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () {
+                  _search.clear();
+                  ref.read(womenFilterProvider.notifier).clear();
+                },
+                icon: const Icon(Icons.filter_alt_off),
+                label: const Text('مسح كل الفلاتر'),
+              ),
+            ),
+          Expanded(
+            child: AsyncBody(
+              value: list,
+              onRetry: () => ref.invalidate(womenListProvider),
+              builder: (s) {
+                if (s.items.isEmpty && !s.hasMore) {
+                  return EmptyState(
+                    icon: Icons.group_off,
+                    title: filter.isEmpty
+                        ? 'لا توجد سيدات بعد'
+                        : 'لا توجد نتائج',
+                    message: filter.isEmpty
+                        ? 'أضيفي سيدة جديدة.'
+                        : 'جربي تغيير البحث أو الفلاتر.',
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: () => ref.refresh(womenListProvider.future),
+                  child: ListView.separated(
+                    controller: _scroll,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    itemCount: s.items.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      if (i == s.items.length) {
+                        if (s.hasMore) {
+                          return Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Center(
+                              child: s.loadingMore
+                                  ? const CircularProgressIndicator()
+                                  : OutlinedButton(
+                                      onPressed: () => ref
+                                          .read(womenListProvider.notifier)
+                                          .loadMore(),
+                                      child: const Text('عرض المزيد'),
+                                    ),
+                            ),
+                          );
+                        }
+                        return const SizedBox(height: 8);
                       }
-                      return const SizedBox(height: 8);
-                    }
-                    final w = s.items[i];
-                    return WomanTile(
-                      woman: w,
-                      servantName: streets[w.streetId]?.servantName,
-                      isMine: streets[w.streetId]?.servantId == user.id,
-                      onTap: () => context.push(Routes.woman(w.id)),
-                    );
-                  },
-                ),
-              );
-            },
+                      final w = s.items[i];
+                      return WomanTile(
+                        woman: w,
+                        servantName: streets[w.streetId]?.servantName,
+                        isMine: streets[w.streetId]?.servantId == user.id,
+                        onTap: () => context.push(Routes.woman(w.id)),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }

@@ -40,11 +40,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   /// (A–E), so an exported file can be re-imported as is.
   static const _womenHeaders = [
     'الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد',
-    'التليفون الأرضي', 'نشطة', 'غياب متتالي', 'مرات الحضور', 'مرات الغياب', 'مكالمات', 'زيارات', 'ملاحظات',
+    'التليفون الأرضي', 'خادمة', 'نشطة', 'غياب متتالي', 'مرات الحضور', 'مرات الغياب', 'مكالمات', 'زيارات', 'ملاحظات',
   ];
 
   List<Object?> _womanRow(Woman w) => [
-        w.fullName, w.phone, w.streetName, w.address, w.birth.display, w.landline,
+        w.fullName, w.phone, w.streetName, w.address, w.birth.display, w.landline, w.isServant ? 'نعم' : '',
         w.active, w.consecutiveAbsences,
         w.totalPresent, w.totalAbsent, w.phoneCalls, w.homeVisits, w.notes,
       ];

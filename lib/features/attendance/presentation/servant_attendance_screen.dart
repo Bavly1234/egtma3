@@ -10,8 +10,7 @@ import '../../../core/widgets/common.dart';
 import '../../../core/widgets/simple_charts.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/data/auth_repository.dart';
-import '../../auth/domain/app_user.dart';
-import '../../users/data/users_repository.dart';
+import '../../women/domain/woman.dart';
 import '../data/servant_attendance_repository.dart';
 
 /// أبونا takes the servants' attendance for a Wednesday.
@@ -38,7 +37,7 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
     if (d != null) setState(() => _date = d);
   }
 
-  void _mark(AppUser servant, AttendanceStatus? current, AttendanceStatus status) {
+  void _mark(Woman servant, AttendanceStatus? current, AttendanceStatus status) {
     final repo = ref.read(servantAttendanceRepositoryProvider);
     final meetingId = Dates.dayId(_date);
     final write = current == status
@@ -49,7 +48,7 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final servants = ref.watch(activeServantsProvider);
+    final servants = ref.watch(servantWomenProvider);
     final statuses = ref.watch(servantMeetingProvider(Dates.dayId(_date))).value ?? const {};
     return Scaffold(
       appBar: AppBar(
@@ -76,11 +75,17 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('اضغط "حاضرة" أو "غائبة" — والضغط تاني على نفس الزرار يلغيه.',
+            const Text(
+                'اضغط "حاضرة" أو "غائبة" — والضغط تاني على نفس الزرار يلغيه. '
+                'اللي ما اتعلمش عليها بتتسجل غائبة لوحدها الأربعاء الساعة 9 بالليل.',
                 style: TextStyle(fontSize: 16, color: AppColors.textMuted)),
             const SizedBox(height: 8),
             if (list.isEmpty)
-              const EmptyState(icon: Icons.badge, title: 'لا توجد خادمات بعد'),
+              const EmptyState(
+                icon: Icons.badge,
+                title: 'لا توجد خادمات بعد',
+                message: 'افتح بيانات أي سيدة واختار "خادمة: نعم" — أو ضيف عمود "خادمة" في ملف Excel.',
+              ),
             for (final s in list)
               _ServantRow(
                 servant: s,
@@ -96,7 +101,7 @@ class _State extends ConsumerState<ServantAttendanceScreen> {
 
 class _ServantRow extends StatelessWidget {
   const _ServantRow({required this.servant, required this.status, required this.onMark});
-  final AppUser servant;
+  final Woman servant;
   final AttendanceStatus? status;
   final ValueChanged<AttendanceStatus> onMark;
 
@@ -136,7 +141,7 @@ class _ServantRow extends StatelessWidget {
             const Icon(Icons.badge, color: AppColors.primary, size: 30),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(servant.name,
+              child: Text(servant.fullName,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
             ),
             btn('حاضرة', AttendanceStatus.present, AppColors.present),

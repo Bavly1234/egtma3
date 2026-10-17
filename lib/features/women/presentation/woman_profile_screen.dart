@@ -59,6 +59,9 @@ class _ProfileBody extends ConsumerWidget {
     final now = DateTime.now();
     return ListView(padding: const EdgeInsets.all(16), children: [
       Text(w.fullName, style: Theme.of(context).textTheme.headlineMedium),
+      if (w.isServant)
+        const Text('🎖 خادمة',
+            style: TextStyle(color: AppColors.gold, fontSize: 18, fontWeight: FontWeight.w800)),
       if (!w.active)
         const Text('غير نشطة',
             style: TextStyle(color: AppColors.absent, fontSize: 18)),

@@ -141,6 +141,8 @@ class AttendanceRepository {
     final cutoff = Dates.meetingCutoff(Dates.parseDayId(meetingId));
     final unmarked = womenSnap.docs.where((d) {
       if (marked.contains(d.id)) return false;
+      // Servants have their own attendance (taken by أبونا).
+      if (d.data()['isServant'] == true) return false;
       final created = tsToDate(d.data()['createdAt']);
       return created == null || !created.isAfter(cutoff);
     }).toList();

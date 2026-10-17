@@ -19,6 +19,7 @@ class Woman {
     required this.dateOfBirth,
     required this.active,
     this.landline = '',
+    this.isServant = false,
     this.birthDay,
     this.birthMonth,
     this.notes = '',
@@ -52,6 +53,10 @@ class Woman {
 
   /// Home landline, e.g. 035916219.
   final String landline;
+
+  /// She serves in the meeting (خادمة). Servants' attendance is taken by
+  /// أبونا on a separate page and they are not in the women's list.
+  final bool isServant;
   final String notes;
 
   // Server-maintained summary (Cloud Functions only).
@@ -95,6 +100,7 @@ class Woman {
         birthDay: (m['birthDay'] as num?)?.toInt(),
         birthMonth: (m['birthMonth'] as num?)?.toInt(),
         landline: (m['landline'] as String?) ?? '',
+        isServant: (m['isServant'] as bool?) ?? false,
         active: (m['active'] as bool?) ?? true,
         notes: (m['notes'] as String?) ?? '',
         consecutiveAbsences: (m['consecutiveAbsences'] as num?)?.toInt() ?? 0,
@@ -122,6 +128,7 @@ class WomanDraft {
     required this.phone,
     this.birth = BirthDate.empty,
     this.landline = '',
+    this.isServant = false,
     this.active = true,
     this.notes = '',
   });
@@ -131,6 +138,7 @@ class WomanDraft {
   final String address;
   final String phone; // normalised mobile
   final String landline;
+  final bool isServant;
   final BirthDate birth;
   final bool active;
   final String notes;
@@ -148,6 +156,7 @@ class WomanDraft {
       'address': address.trim(),
       'phone': phone,
       'landline': landline,
+      'isServant': isServant,
       'dateOfBirth': birth.full,
       'birthMonth': birth.month,
       'birthDay': birth.day,

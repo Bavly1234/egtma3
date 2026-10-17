@@ -9,16 +9,18 @@ import '../../auth/domain/app_user.dart';
 import '../../followups/data/absence_processor.dart';
 import '../../women/domain/woman.dart';
 import 'attendance_repository.dart';
+import 'servant_attendance_repository.dart';
 
 /// Wednesday 9pm rule without a server: whichever phone opens the app first
 /// after the cutoff marks every still-unmarked woman absent (once per
 /// meeting — `autoAbsentDone` prevents double counting) and then runs the
 /// افتقاد rules for them.
 class AutoAbsenceService {
-  AutoAbsenceService(this._db, this._attendance, this._processor);
+  AutoAbsenceService(this._db, this._attendance, this._processor, this._servants);
   final FirebaseFirestore _db;
   final AttendanceRepository _attendance;
   final AbsenceProcessor _processor;
+  final ServantAttendanceRepository _servants;
   final _running = <String>{};
 
   /// The most recent Wednesday whose 9pm cutoff has already passed.
@@ -34,6 +36,13 @@ class AutoAbsenceService {
     final meetingId = Dates.dayId(date);
     if (!_running.add(meetingId)) return;
     try {
+      // The servants (women marked خادمة) the same way — independently, so
+      // a problem there never blocks the women's auto-absence.
+      try {
+        await _servants.autoFillAbsent(meetingId, user);
+      } catch (e) {
+        AppLog.w('Servant auto absence failed', e);
+      }
       final ids = await _attendance.autoFillAbsent(meetingId, user);
       for (var i = 0; i < ids.length; i += 30) {
         final chunk = ids.sublist(i, (i + 30).clamp(0, ids.length));
@@ -59,4 +68,5 @@ final autoAbsenceServiceProvider = Provider((ref) => AutoAbsenceService(
       ref.watch(firestoreProvider),
       ref.watch(attendanceRepositoryProvider),
       ref.watch(absenceProcessorProvider),
+      ref.watch(servantAttendanceRepositoryProvider),
     ));

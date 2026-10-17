@@ -69,6 +69,8 @@ final attendanceWomenProvider =
         user,
         WomenFilter(active: true, streetId: f.$1),
       );
+  // Servants (خادمات) are taken separately by أبونا.
+  list.removeWhere((w) => w.isServant);
   final servantId = f.$2;
   final streets = ref.watch(streetMapProvider);
   final filtered = servantId == null
@@ -136,6 +138,30 @@ class AttendanceActions {
       ref.read(meetingStatusesProvider).value ?? const {};
 
   void mark(Woman w, AttendanceStatus status) => markAll([w], status);
+
+  /// Toggle for the single "حاضر" button: tapping حاضر again undoes the
+  /// mark (back to unmarked). The [uiStatus] (what the button currently
+  /// shows) is the source of truth with the stream as backup — the statuses
+  /// stream can lag behind on web, and relying only on it made the second
+  /// tap silently do nothing.
+  void togglePresent(Woman w, AttendanceStatus? uiStatus) =>
+      toggle(w, AttendanceStatus.present, uiStatus);
+
+  /// حاضر / غائب buttons: tapping the button that is already selected undoes
+  /// the mark (back to unmarked); tapping the other one switches the mark.
+  void toggle(Woman w, AttendanceStatus status, AttendanceStatus? uiStatus) {
+    final AttendanceStatus? current = _current[w.id] ?? uiStatus;
+    if (current == status) {
+      final meetingId = Dates.dayId(ref.read(meetingDateProvider));
+      final streets = ref.read(streetMapProvider);
+      _track(
+          ref.read(attendanceRepositoryProvider).clear(meetingId, w, current!,
+              meetingServantId: streets[w.streetId]?.servantId),
+          [w]);
+    } else {
+      mark(w, status);
+    }
+  }
 
   void clear(Woman w) {
     final prev = _current[w.id];

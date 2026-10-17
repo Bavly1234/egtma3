@@ -159,4 +159,27 @@ void main() {
       expect(row.draft!.phone, '01222000908');
     });
   });
+
+  group('servants column', () {
+    test('"خادمة" column marks servants (نعم / ✓ / 1), others stay women', () {
+      final h = ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد', 'خادمة'];
+      final rows = ImportParser.parse([
+        h,
+        ['سيدة 1', null, 'ش', 'ع', null, 'نعم'],
+        ['سيدة 2', null, 'ش', 'ع', null, '✓'],
+        ['سيدة 3', null, 'ش', 'ع', null, '1'],
+        ['سيدة 4', null, 'ش', 'ع', null, 'لا'],
+        ['سيدة 5', null, 'ش', 'ع', null, null],
+      ], ColumnDetection.detect(h), now: now);
+      expect(rows.map((r) => r.draft!.isServant), [true, true, true, false, false]);
+    });
+
+    test('sheets without the column import as non-servants', () {
+      final h = ['الاسم كامل', 'رقم التليفون', 'الشارع', 'العنوان بالكامل', 'تاريخ الميلاد'];
+      final row = ImportParser.parse([h, ['سيدة', null, 'ش', 'ع', null]],
+              ColumnDetection.detect(h), now: now)
+          .single;
+      expect(row.draft!.isServant, isFalse);
+    });
+  });
 }

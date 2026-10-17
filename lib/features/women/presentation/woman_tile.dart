@@ -64,6 +64,8 @@ class WomanTile extends StatelessWidget {
                     if (isMine)
                       const _Badge('✓ شارعك', AppColors.primary,
                           AppColors.primaryLight),
+                    if (w.isServant)
+                      const _Badge('🎖 خادمة', AppColors.gold, AppColors.goldLight),
                     if (!w.active)
                       const _Badge('غير نشطة', Colors.black54, Color(0xFFEEEEEE)),
                     if (w.consecutiveAbsences >= 2)

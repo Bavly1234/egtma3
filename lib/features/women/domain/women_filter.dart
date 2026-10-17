@@ -42,6 +42,7 @@ class WomenFilter {
     this.minConsecutiveAbsences = 0,
     this.maxAttendanceRate,
     this.streetIds,
+    this.servantsOnly = false,
   });
 
   final String query;
@@ -59,6 +60,9 @@ class WomenFilter {
   /// assigned by street). Applied in memory.
   final Set<String>? streetIds;
 
+  /// Only women marked خادمة.
+  final bool servantsOnly;
+
   static const empty = WomenFilter();
 
   bool get hasServerFilters =>
@@ -66,6 +70,7 @@ class WomenFilter {
       active != null ||
       birthMonth != null ||
       followUp != FollowUpFilter.any ||
+      servantsOnly ||
       query.trim().isNotEmpty;
 
   bool get isEmpty =>
@@ -85,6 +90,7 @@ class WomenFilter {
         minConsecutiveAbsences > 0,
         maxAttendanceRate != null,
         streetIds != null,
+        servantsOnly,
       ].where((b) => b).length;
 
   List<String> get queryTokens => ArabicText.normalize(query)
@@ -130,6 +136,7 @@ class WomenFilter {
     int? minConsecutiveAbsences,
     double? Function()? maxAttendanceRate,
     Set<String>? Function()? streetIds,
+    bool? servantsOnly,
   }) =>
       WomenFilter(
         query: query ?? this.query,
@@ -144,5 +151,6 @@ class WomenFilter {
             ? maxAttendanceRate()
             : this.maxAttendanceRate,
         streetIds: streetIds != null ? streetIds() : this.streetIds,
+        servantsOnly: servantsOnly ?? this.servantsOnly,
       );
 }

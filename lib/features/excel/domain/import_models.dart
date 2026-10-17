@@ -4,7 +4,7 @@ import '../../../core/utils/phone.dart';
 import '../../women/domain/woman.dart';
 import '../../women/domain/woman_validator.dart';
 
-enum ImportField { name, street, address, phone, dateOfBirth, landline }
+enum ImportField { name, street, address, phone, dateOfBirth, landline, servant }
 
 /// Columns that must exist in the header row. The landline column is
 /// optional (landlines are usually written inside the phone cell).
@@ -38,6 +38,7 @@ const Map<ImportField, List<String>> kImportAliases = {
     'date of birth', 'dob', 'birth date', 'birthdate', 'تاريخ الميلاد',
     'الميلاد', 'تاريخ الميلاد', 'عيد الميلاد'
   ],
+  ImportField.servant: ['servant', 'خادمة', 'خادمه', 'خادم', 'الخدمة', 'الخدمه', 'خادمة؟'],
   ImportField.landline: [
     'landline', 'home phone', 'التليفون الارضي', 'تليفون ارضي', 'الارضي',
     'رقم الارضي', 'التليفون الأرضي', 'تليفون أرضي'
@@ -57,6 +58,7 @@ class ColumnDetection {
     ImportField.phone: 'التليفون',
     ImportField.dateOfBirth: 'تاريخ الميلاد',
     ImportField.landline: 'التليفون الأرضي',
+    ImportField.servant: 'خادمة',
   };
 
   static ColumnDetection detect(List<Object?> headerRow) {
@@ -139,6 +141,12 @@ abstract final class ImportParser {
           .where((t) => t.isNotEmpty)
           .join(' — ');
 
+      // Optional "خادمة" column: نعم / yes / 1 / ✓ means she serves.
+      final servantRaw = text(r, ImportField.servant);
+      final isServant = const {'✓', '✔', '√', '☑'}.contains(servantRaw) ||
+          const {'نعم', 'ايوه', 'اه', 'yes', 'y', '1', 'true', 'x', 'خادمه', 'خادم'}
+              .contains(ArabicText.normalize(servantRaw));
+
       final dobRaw = raw(r, ImportField.dateOfBirth);
       final birth = BirthDate.parse(dobRaw, now: now);
 
@@ -161,6 +169,7 @@ abstract final class ImportParser {
                 landline: landline,
                 birth: birth!,
                 notes: notes,
+                isServant: isServant,
               ),
       ));
     }

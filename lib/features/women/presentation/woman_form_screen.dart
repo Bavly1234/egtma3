@@ -53,6 +53,7 @@ class _FormState extends ConsumerState<_Form> {
   late int? _bMonth = widget.initial?.birth.month;
   late int? _bYear = widget.initial?.birth.year;
   late final bool _active = widget.initial?.active ?? true;
+  late bool _isServant = widget.initial?.isServant ?? false;
   bool _busy = false;
 
   @override
@@ -141,6 +142,7 @@ class _FormState extends ConsumerState<_Form> {
       landline: _landlineValue,
       birth: BirthDate(day: _bDay, month: _bMonth, year: _bYear),
       active: _active,
+      isServant: _isServant,
       notes: _notes.text,
     );
     final repo = ref.read(womenRepositoryProvider);
@@ -224,6 +226,16 @@ class _FormState extends ConsumerState<_Form> {
           ),
           gap,
           _birthPicker(),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              value: _isServant,
+              onChanged: (v) => setState(() => _isServant = v),
+              secondary: const Icon(Icons.badge, size: 30),
+              title: const Text('خادمة'),
+              subtitle: const Text('أبونا بياخد حضورها في صفحة "حضور الخادمات"'),
+            ),
+          ),
           gap,
           TextFormField(
             controller: _notes,
