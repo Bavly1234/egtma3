@@ -8,6 +8,7 @@ import '../../../core/routing/routes.dart';
 import '../../../core/services/local_notifications.dart';
 import '../../attendance/data/auto_absence_service.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../notifications/data/notification_repository.dart';
 import '../../notifications/data/reminder_service.dart';
 
 class _Tab {
@@ -112,6 +113,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
       ref.read(reminderServiceProvider).start(user);
       // Wednesday 9pm: mark everyone not marked present as absent.
       ref.read(autoAbsenceServiceProvider).runIfDue(user);
+      // Leftover notifications about the deleted test data.
+      ref.read(notificationRepositoryProvider)
+          .deleteMine(user.id, demoOnly: true)
+          .ignore();
     }
     final isFather = user?.isFather ?? false;
     final wide = MediaQuery.sizeOf(context).width >= 900;

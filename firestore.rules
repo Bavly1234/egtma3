@@ -207,7 +207,7 @@ service cloud.firestore {
         && request.resource.data.type in ['attendance', 'follow_up', 'birthday', 'conference', 'system', 'reminder', 'verse']
         && request.resource.data.readAt == null;
       allow update: if signedIn() && resource.data.recipientId == request.auth.uid && onlyChanges(['readAt']);
-      allow delete: if isFather();
+      allow delete: if isFather() || (signedIn() && resource.data.recipientId == request.auth.uid);
     }
 
     // ---------- content & settings ----------

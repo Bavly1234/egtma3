@@ -58,6 +58,30 @@ class NotificationRepository {
       throw AppFailure.from(e, st);
     }
   }
+
+  /// Deletes my notifications — all of them, or only the ones about the
+  /// test data (their text contains "تجريبي"). Returns how many.
+  Future<int> deleteMine(String uid, {bool demoOnly = false}) async {
+    try {
+      final snap = await _mine(uid).get();
+      final refs = [
+        for (final d in snap.docs)
+          if (!demoOnly ||
+              '${d.data()['title']} ${d.data()['message']}'.contains('تجريبي'))
+            d.reference,
+      ];
+      for (var i = 0; i < refs.length; i += 400) {
+        final batch = _db.batch();
+        for (final r in refs.skip(i).take(400)) {
+          batch.delete(r);
+        }
+        await batch.commit();
+      }
+      return refs.length;
+    } catch (e, st) {
+      throw AppFailure.from(e, st);
+    }
+  }
 }
 
 final notificationRepositoryProvider =

@@ -53,6 +53,23 @@ class _State extends ConsumerState<NotificationsScreen> {
                 successMessage: 'تم'),
             child: const Text('قراءة الكل'),
           ),
+          IconButton(
+            tooltip: 'مسح كل الإشعارات',
+            icon: const Icon(Icons.delete_sweep),
+            onPressed: () async {
+              final ok = await confirmAction(context,
+                  title: 'مسح كل الإشعارات',
+                  message: 'كل إشعاراتك هتتمسح.',
+                  confirmLabel: 'امسح');
+              if (!ok || !context.mounted) return;
+              await runGuarded(context, () async {
+                final n = await ref
+                    .read(notificationRepositoryProvider)
+                    .deleteMine(user.id);
+                if (context.mounted) AppToast.success(context, 'تم مسح $n إشعار');
+              });
+            },
+          ),
         ],
       ),
       body: Column(children: [
