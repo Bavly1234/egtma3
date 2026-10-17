@@ -234,7 +234,7 @@ class _Summary extends ConsumerWidget {
             _count('حاضر', present, AppColors.present),
             _count('غائب', absent, AppColors.absent),
             _count('لم تُسجل', unmarked, AppColors.textMuted),
-            _count('النسبة', null, AppColors.primary, text: percent(rate)),
+            _count('نسبة الحضور', null, AppColors.primary, text: percent(rate)),
           ]),
           const SizedBox(height: 12),
           SizedBox(
