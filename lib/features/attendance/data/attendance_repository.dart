@@ -13,6 +13,10 @@ import '../../women/domain/woman.dart';
 import '../domain/attendance_record.dart';
 
 class AttendanceRepository {
+  /// The security rules check each woman exists, and Firestore allows only
+  /// ~20 such checks per batch — a bigger batch is rejected as a whole.
+  static const _batchSize = 12;
+
   AttendanceRepository(this._db, this._audit);
   final FirebaseFirestore _db;
   final AuditRepository _audit;
@@ -59,7 +63,7 @@ class AttendanceRepository {
     Map<String, String?> meetingServants = const {},
   }) async {
     final list = women.where((w) => previous[w.id] != status).toList();
-    for (var i = 0; i < list.length; i += 150) {
+    for (var i = 0; i < list.length; i += _batchSize) {
       final batch = _db.batch();
       final top = <String, int>{};
       final byStreet = <String, Map<String, int>>{};
@@ -76,7 +80,7 @@ class AttendanceRepository {
             .update(s.wire, (v) => v + sign, ifAbsent: () => sign);
       }
 
-      for (final w in list.skip(i).take(150)) {
+      for (final w in list.skip(i).take(_batchSize)) {
         batch.set(_col.doc(AttendanceRecord.docId(meetingId, w.id)), {
           'meetingId': meetingId,
           'womanId': w.id,
@@ -163,12 +167,12 @@ class AttendanceRepository {
         streetServant[w['streetId'] as String?] ?? 'unassigned';
 
     final filledIds = <String>[];
-    for (var i = 0; i < unmarked.length; i += 150) {
+    for (var i = 0; i < unmarked.length; i += _batchSize) {
       final batch = _db.batch();
       final top = <String, int>{};
       final byStreet = <String, Map<String, int>>{};
       final byServant = <String, Map<String, int>>{};
-      for (final d in unmarked.skip(i).take(150)) {
+      for (final d in unmarked.skip(i).take(_batchSize)) {
         final w = d.data();
         final streetKey = (w['streetId'] as String?)?.isNotEmpty == true
             ? w['streetId'] as String
