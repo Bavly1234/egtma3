@@ -133,7 +133,9 @@ class _StreetsScreenState extends ConsumerState<StreetsScreen> {
                     context.go(Routes.women);
                   },
                   onRename: () => _addOrRename(id: rows[i].streetId, current: rows[i].name),
-                  onAssign: () => _assign(rows[i]),
+                  onAssign: ref.read(requireUserProvider).isFather
+                      ? () => _assign(rows[i])
+                      : null,
                 ),
               );
             },
@@ -150,13 +152,14 @@ class _StreetCard extends StatelessWidget {
     required this.servantName,
     required this.onOpen,
     required this.onRename,
-    required this.onAssign,
+    this.onAssign,
   });
   final StreetStats s;
   final String? servantName;
   final VoidCallback onOpen;
   final VoidCallback onRename;
-  final VoidCallback onAssign;
+  /// Null for servants: only أبونا assigns a servant to a street.
+  final VoidCallback? onAssign;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -174,10 +177,11 @@ class _StreetCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
                 PopupMenuButton<int>(
                   tooltip: 'خيارات',
-                  onSelected: (v) => v == 0 ? onRename() : onAssign(),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 0, child: Text('تعديل الاسم')),
-                    PopupMenuItem(value: 1, child: Text('تعيين خادمة مسؤولة')),
+                  onSelected: (v) => v == 0 ? onRename() : onAssign?.call(),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 0, child: Text('تعديل الاسم')),
+                    if (onAssign != null)
+                      const PopupMenuItem(value: 1, child: Text('تعيين خادمة مسؤولة')),
                   ],
                 ),
               ]),

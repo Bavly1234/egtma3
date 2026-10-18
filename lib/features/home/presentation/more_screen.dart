@@ -40,12 +40,17 @@ class MoreScreen extends ConsumerWidget {
             icon: Icons.history,
             title: 'الاجتماعات اللي فاتت',
             onTap: () => go(Routes.attendanceHistory)),
-        if (!user.isFather)
+        if (!user.isFather) ...[
           MenuTile(
               icon: Icons.insights,
               title: 'إحصائياتي',
               color: AppColors.present,
               onTap: () => go(Routes.statsServants)),
+          MenuTile(
+              icon: Icons.signpost,
+              title: 'الشوارع (تعديل الأسماء)',
+              onTap: () => go(Routes.streets)),
+        ],
         if (user.isFather) ...[
           MenuTile(
               icon: Icons.how_to_reg,

@@ -55,5 +55,7 @@ abstract final class Routes {
   /// Servants share every statistics page with the father.
   static bool isFatherOnly(String location) =>
       location != statsServants &&
+      location != streets && // servants may rename streets (no assigning)
+
       fatherOnly.any((p) => location == p || location.startsWith('$p/'));
 }
